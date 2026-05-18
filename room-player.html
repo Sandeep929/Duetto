@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Room Music Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        h2 {
+            color: #222;
+            margin-bottom: 20px;
+            font-size: 28px;
+        }
+
+        h3 {
+            color: #333;
+            margin-top: 20px;
+            margin-bottom: 12px;
+            font-size: 16px;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 6px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-right: 8px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:active {
+            background-color: #004085;
+        }
+
+        input[type="text"],
+        input[type="file"],
+        input[type="range"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input[type="text"],
+        input[type="file"] {
+            background-color: white;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
+        }
+
+        div[style*="margin-top"] {
+            background-color: white;
+            padding: 16px;
+            border-radius: 6px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        span {
+            font-weight: 500;
+        }
+
+        #songList,
+        #playlistList {
+            background-color: #fafafa;
+            padding: 12px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+        }
+
+        #currentTrack {
+            font-size: 16px;
+            font-weight: 500;
+            color: #007bff;
+        }
+
+        #timeLabel {
+            margin-left: 12px;
+            color: #666;
+        }
+
+        #playlistMessage {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background-color: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            color: #856404;
+        }
+
+        #userCounter {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        /* Spotify Player Styling */
+        .player-div {
+            background: linear-gradient(180deg, rgba(30, 215, 96, 0.2) 0%, rgba(30, 215, 96, 0.05) 100%);
+            border: 2px solid #1DB954;
+            text-align: center;
+        }
+
+        .player-div h3 {
+            color: #1DB954;
+            border-color: #1DB954;
+        }
+
+        .player-div button {
+            background-color: #1DB954;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 4px;
+            font-size: 16px;
+        }
+
+        .player-div button:hover {
+            background-color: #1ed760;
+        }
+
+        .player-div button:active {
+            background-color: #1aa34a;
+        }
+
+        #playPauseButton {
+            width: 50px;
+            height: 50px;
+            font-size: 18px;
+        }
+    </style>
+    <script src="api.js"></script>
+</head>
+
+<body>
+    <h2>Room Music Player</h2>
+    <div>
+        <strong>Room:</strong> <span id="roomLabel">unknown</span><br>
+        <strong>User:</strong> <span id="userLabel">Guest</span>
+        <span id="userCounter">👥 Users: 1</span>
+    </div>
+
+    <div id="usersList"
+        style="margin: 15px 0; padding: 10px; background-color: #f0f0f0; border-radius: 4px; display: none;">
+        <strong>Users in Room:</strong>
+        <div id="usersListContent" style="margin-top: 8px; font-size: 14px;"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <input type="file" id="fileInput" multiple accept="audio/*" style="margin-left: 10px;">
+        <button onclick="loadSelectedFiles()">Load Selected Files</button>
+        <input type="text" id="searchInput" placeholder="Search songs" style="width: 250px; margin-left: 10px;">
+        <button onclick="searchSongs()">Search</button>
+        <p style="font-size: 12px; color: #666; margin-top: 4px;">Click "Choose Files" to select multiple audio files
+            from your computer.</p>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <h3>Available Songs</h3>
+        <div id="songList"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <h3>Create Playlist</h3>
+        <input type="text" id="playlistName" placeholder="Playlist name" style="width: 250px;">
+        <button onclick="createPlaylist()">Create</button>
+        <div id="playlistMessage" style="color: red; margin-top: 8px;"></div>
+    </div>
+
+    <div style="margin-top: 20px;">
+        <h3>Playlists</h3>
+        <div id="playlistList"></div>
+    </div>
+
+    <div style="margin-top: 20px;" class="player-div">
+        <h3>Player</h3>
+        <div>
+            <button onclick="prevTrack()">⏮</button>
+            <button onclick="togglePlay()" id="playPauseButton">▶</button>
+            <button onclick="nextTrack()">⏭</button>
+            <button onclick="stopTrack()">⏹</button>
+        </div>
+        <div style="margin-top: 10px;">
+            <span id="currentTrack">No track selected</span>
+        </div>
+        <div style="margin-top: 10px;">
+            <input type="range" id="progressBar" min="0" max="100" value="0" style="width: 400px;"
+                onchange="seekTrack(event)">
+            <span id="timeLabel">00:00 / 00:00</span>
+        </div>
+        <div style="margin-top: 10px;">
+            Volume: <input type="range" id="volumeControl" min="0" max="1" step="0.05" value="0.8"
+                onchange="setVolume(event)">
+        </div>
+    </div>
+
+    <audio id="audioPlayer"></audio>
+
+    <div style="margin-top: 20px;">
+        <button onclick="goBack()">Back to room selection</button>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+    <script>
+        const songsRootPath = 'D:\\Duetto Gane';
+        let availableSongs = [];
+        let filteredSongs = [];
+        let playlists = [];
+        let currentPlaylist = null;
+        let currentSongIndex = -1;
+        const audio = document.getElementById('audioPlayer');
+        let stompClient = null;
+        let currentRoomId = null;
+        let currentUserId = null;
+        let userCount = 1;
+        let usersInRoom = [];
+        let userListDisplay = null;
+        let isRemoteAction = false;
+        let currentTrackUrl = '';
+
+        function initPage() {
+            console.log('\n📱 ========== PAGE INITIALIZATION START ==========');
+            const params = new URLSearchParams(window.location.search);
+            const roomId = params.get('roomId') || localStorage.getItem('joinedRoomId') || 'unknown';
+            currentRoomId = roomId;
+            console.log('🏠 [INIT] Room ID:', roomId);
+            document.getElementById('roomLabel').textContent = roomId;
+
+            const userItem = localStorage.getItem('user');
+            if (userItem) {
+                const userData = JSON.parse(userItem);
+                currentUserId = userData.userId;
+                console.log('👤 [INIT] Current User ID:', userData.userId);
+                document.getElementById('userLabel').textContent = userData.userId;
+            }
+
+            document.getElementById('volumeControl').value = 0.8;
+            audio.volume = 0.8;
+            console.log('🔊 [INIT] Volume set to 0.8');
+            audio.addEventListener('timeupdate', updateProgress);
+            audio.addEventListener('ended', nextTrack);
+            console.log('🎵 [INIT] Audio event listeners attached');
+            loadDefaultSongs();
+
+            const justJoined = sessionStorage.getItem('justJoined') === 'true';
+            if (justJoined) {
+                console.log('✅ [INIT] Detected just joined from index.html, skipping duplicate join call.');
+                sessionStorage.removeItem('justJoined');
+            }
+
+            // When page loads/reloads, make sure backend knows we are here
+            if (currentRoomId && currentRoomId !== 'unknown' && currentUserId && !justJoined) {
+                const joinPath = `/room/join?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
+                console.log('📡 [API] Re-joining room on page load:', joinPath);
+                fetchWithFallback(joinPath, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                }).then(() => {
+                    fetchRoomUserCount();
+                    connectToRoom();
+                }).catch(err => {
+                    console.error('❌ [INIT] Failed to re-join room:', err);
+                    fetchRoomUserCount();
+                    connectToRoom();
+                });
+            } else {
+                fetchRoomUserCount();
+                connectToRoom();
+            }
+
+
+
+            console.log('📱 ========== PAGE INITIALIZATION END ==========\n');
+        }
+
+        function fetchRoomUserCount() {
+            if (!currentRoomId || currentRoomId === 'unknown') {
+                console.warn('⚠️ [USER COUNT] Cannot fetch: invalid room ID');
+                return;
+            }
+
+            const urlPath = `/room/userCount?roomId=${encodeURIComponent(currentRoomId)}`;
+            console.log('📊 [API] GET request to fetch user count path:', urlPath);
+
+            fetchWithFallback(urlPath, {
+                method: 'GET',
+                mode: 'cors',
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            })
+                .then(response => {
+                    console.log('📥 [API] User count response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`Failed to fetch user count: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('✅ [USER COUNT] Received:', data);
+                    const newCount = data.count || data.userCount || 1;
+                    
+                    // If the count has changed, someone left/joined but we missed the STOMP broadcast.
+                    // Ask the backend to broadcast the updated detailed users list.
+                    if (userCount !== newCount && stompClient && stompClient.connected) {
+                        console.log(`🔄 [USER COUNT] Count changed from ${userCount} to ${newCount}. Requesting broadcast...`);
+                        requestUserCount(); 
+                    }
+                    
+                    userCount = newCount;
+                    updateUserCounter();
+                    
+                    if (data.users) {
+                        usersInRoom = data.users;
+                        updateUsersList();
+                    }
+                })
+                .catch(error => {
+                    console.error('❌ [USER COUNT] Error:', error);
+                });
+        }
+
+        function connectToRoom() {
+            console.log('\n🔗 ========== STOMP CONNECTION START ==========');
+            if (!currentRoomId || currentRoomId === 'unknown') {
+                console.warn('⚠️ [STOMP] Cannot connect: no valid room ID');
+                return;
+            }
+
+            console.log('🔗 [STOMP] Connecting to room:', currentRoomId, 'as user:', currentUserId);
+
+            connectStompClientWithFallback(function (stompClientArg, frame) {
+                stompClient = stompClientArg;
+                console.log('✅ [STOMP] Connected successfully:', frame);
+                subscribeToRoom();
+                subscribeToSongsTopic();
+                subscribeToSyncTopic();
+            }, function (error) {
+                console.error('❌ [STOMP] Connection error:', error);
+            });
+        }
+
+        function subscribeToRoom() {
+            if (!stompClient || !stompClient.connected || !currentRoomId) {
+                console.warn('⚠️ [SUBSCRIBE] Cannot subscribe: STOMP not connected or no room ID');
+                return;
+            }
+
+            // Subscribe to the users topic for this room
+            const destination = `/topic/room/${currentRoomId}/users`;
+            console.log('📢 [SUBSCRIBE] Subscribing to:', destination);
+            stompClient.subscribe(destination, function (message) {
+                console.log('📩 [MESSAGE] Received message on', destination);
+                try {
+                    const data = JSON.parse(message.body);
+                    console.log('📊 [MESSAGE] Users data:', data);
+
+                    const prevUserCount = userCount;
+                    // Update user list and count
+                    usersInRoom = data.users || [];
+                    userCount = data.userCount || data.count || 1;
+                    console.log('👥 [UPDATE] User count:', userCount, 'Users:', usersInRoom);
+
+                    updateUserCounter();
+                    updateUsersList();
+                    
+                    // If a new user joined, broadcast the current state so they can sync up
+                    if (userCount > prevUserCount && prevUserCount > 0) {
+                        // Only the first user in the room broadcasts to prevent message storms
+                        if (usersInRoom.length > 0 && usersInRoom[0] === currentUserId) {
+                            if (currentTrackUrl || (audio.src && !audio.src.endsWith('null'))) {
+                                console.log('🔄 [SYNC] New user joined. Broadcasting current state...');
+                                broadcastSync(audio.paused ? 'pause' : 'play');
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('❌ [MESSAGE] Error parsing users message:', e);
+                }
+            });
+            console.log('🔗 ========== STOMP CONNECTION END ==========\n');
+
+            // Send message to request user count
+            requestUserCount();
+        }
+
+        function requestUserCount() {
+            if (!stompClient || !stompClient.connected || !currentRoomId) {
+                console.warn('⚠️ [REQUEST] Cannot send user count request: STOMP not connected or no room ID');
+                return;
+            }
+
+            const destination = `/app/userCount/${currentRoomId}`;
+            const message = JSON.stringify({
+                roomId: currentRoomId,
+                userId: currentUserId
+            });
+
+            console.log('📤 [MESSAGE] Sending user count request to:', destination);
+            console.log('📦 [MESSAGE] Payload:', message);
+            stompClient.send(destination, {}, message);
+        }
+
+        function updateUserCounter() {
+            const counter = document.getElementById('userCounter');
+            if (counter) {
+                counter.textContent = `👥 Users: ${userCount}`;
+                console.log('📊 [UI] Updated user counter:', userCount);
+            }
+        }
+
+        function updateUsersList() {
+            const usersList = document.getElementById('usersList');
+            const usersContent = document.getElementById('usersListContent');
+
+            if (!usersList || !usersContent) return;
+
+            if (!usersInRoom || usersInRoom.length === 0) {
+                usersList.style.display = 'none';
+                console.log('👥 [UI] Users list hidden (no users)');
+                return;
+            }
+
+            usersList.style.display = 'block';
+            usersContent.innerHTML = usersInRoom.map(user => {
+                return `<div style="padding: 4px 0;">• ${escapeHtml(user)}</div>`;
+            }).join('');
+
+            console.log('👥 [UI] Updated users list:', usersInRoom);
+        }
+
+        function broadcastSync(action, explicitTrackId = null) {
+            if (isRemoteAction) return;
+            if (!stompClient || !stompClient.connected || !currentRoomId) return;
+
+            const trackId = explicitTrackId || currentTrackUrl || audio.src;
+
+            const payload = {
+                action: action,
+                time: Date.now(),
+                sender: currentUserId,
+                playing: !audio.paused,
+                trackId: trackId,
+                currentTime: audio.currentTime || 0,
+                roomId: currentRoomId
+            };
+
+            console.log(`📤 [SYNC] Broadcasting '${action}' event:`, payload);
+            stompClient.send(`/app/sync/${currentRoomId}`, {}, JSON.stringify(payload));
+        }
+
+        function subscribeToSyncTopic() {
+            if (!stompClient || !stompClient.connected || !currentRoomId) return;
+
+            const destination = `/topic/room/${currentRoomId}/sync`;
+            console.log('📢 [SYNC] Subscribing to sync topic:', destination);
+
+            stompClient.subscribe(destination, function (message) {
+                try {
+                    const payload = JSON.parse(message.body);
+                    if (payload.sender === currentUserId) return; // Ignore our own events
+
+                    console.log(`📥 [SYNC] Received remote '${payload.action}' event from ${payload.sender}`);
+                    isRemoteAction = true;
+
+                    let trackChanged = false;
+                    if (payload.trackId && currentTrackUrl !== payload.trackId) {
+                        trackChanged = true;
+                        currentTrackUrl = payload.trackId;
+                        audio.src = payload.trackId;
+
+                        let foundSong = availableSongs.find(s => s.url === payload.trackId);
+                        if (foundSong) {
+                            document.getElementById('currentTrack').textContent = foundSong.title;
+                            console.log(`🔄 [SYNC] Track forcibly changed by remote to: ${foundSong.title}`);
+                        } else {
+                            let extractedTitle = 'Unknown Song';
+                            try {
+                                let tempUrl = payload.trackId;
+                                if (tempUrl.includes('path=')) {
+                                    tempUrl = decodeURIComponent(tempUrl.split('path=')[1]);
+                                }
+                                const parts = tempUrl.split(/[\\/]/);
+                                extractedTitle = parts[parts.length - 1] || 'Unknown Song';
+                            } catch (e) { }
+                            document.getElementById('currentTrack').textContent = extractedTitle;
+                            console.log(`🔄 [SYNC] Track forcibly changed by remote (extracted title): ${extractedTitle}`);
+                        }
+                    }
+
+                    const applyAction = () => {
+                        if (payload.action === 'play') {
+                            console.log(`▶️ [SYNC] Executing remote PLAY at ${payload.currentTime}s`);
+                            audio.currentTime = payload.currentTime;
+                            updateProgress();
+                            const playPromise = audio.play();
+                            if (playPromise !== undefined) {
+                                playPromise.catch(e => console.error('❌ [SYNC] Playback failed for remote play:', e));
+                            }
+                            document.getElementById('playPauseButton').textContent = '⏸';
+                        } else if (payload.action === 'pause') {
+                            console.log(`⏸️ [SYNC] Executing remote PAUSE at ${payload.currentTime}s`);
+                            audio.pause();
+                            audio.currentTime = payload.currentTime;
+                            updateProgress();
+                            document.getElementById('playPauseButton').textContent = '▶';
+                        } else if (payload.action === 'stop') {
+                            console.log(`⏹️ [SYNC] Executing remote STOP`);
+                            audio.pause();
+                            audio.currentTime = 0;
+                            updateProgress();
+                            document.getElementById('playPauseButton').textContent = '▶';
+                        } else if (payload.action === 'seek') {
+                            console.log(`⏭️ [SYNC] Executing remote SEEK to ${payload.currentTime}s. Playing: ${payload.playing}`);
+                            audio.currentTime = payload.currentTime;
+                            updateProgress();
+                            if (payload.playing) {
+                                const playPromise = audio.play();
+                                if (playPromise !== undefined) {
+                                    playPromise.catch(e => console.error('❌ [SYNC] Playback failed for remote seek:', e));
+                                }
+                                document.getElementById('playPauseButton').textContent = '⏸';
+                            } else {
+                                audio.pause();
+                                document.getElementById('playPauseButton').textContent = '▶';
+                            }
+                        }
+                        isRemoteAction = false;
+                    };
+
+                    if (trackChanged) {
+                        const cleanup = () => {
+                            audio.removeEventListener('loadedmetadata', onLoaded);
+                            audio.removeEventListener('error', onError);
+                        };
+                        const onLoaded = () => {
+                            cleanup();
+                            applyAction();
+                        };
+                        const onError = () => {
+                            cleanup();
+                            console.error('❌ [SYNC] Failed to load remote track:', payload.trackId);
+                            isRemoteAction = false;
+                        };
+                        audio.addEventListener('loadedmetadata', onLoaded);
+                        audio.addEventListener('error', onError);
+                    } else {
+                        applyAction();
+                    }
+                } catch (e) {
+                    console.error('❌ [SYNC] Error handling sync message:', e);
+                    isRemoteAction = false;
+                }
+            });
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            };
+            return String(text).replace(/[&<>"']/g, m => map[m]);
+        }
+
+        function loadDefaultSongs() {
+            console.log('🎵 [INIT] Loading local songs from API...');
+            fetchWithFallback('/songs/getLocalSongs')
+                .then(res => res.json())
+                .then(data => {
+                    console.log(`✅ [FILES] Received ${data.length} songs from API`);
+                    availableSongs = data.map(song => ({
+                        id: song.id,
+                        publicId: song.publicId,
+                        title: song.title,
+                        url: song.url
+                    }));
+                    filteredSongs = availableSongs.slice();
+                    renderSongList();
+                })
+                .catch(err => {
+                    console.error('❌ [FILES] Failed to load songs from API:', err);
+                });
+        }
+
+        function loadSelectedFiles() {
+            console.log('\n📁 [FILES] Load selected files clicked');
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+            console.log(`📂 [FILES] Number of files selected: ${files.length}`);
+            if (!files.length) {
+                console.warn('⚠️ [FILES] No files selected');
+                document.getElementById('playlistMessage').textContent = 'No files selected.';
+                return;
+            }
+
+            // Create song metadata
+            const songs = [];
+            const localSongs = [];
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.type.startsWith('audio/')) {
+                    const remoteUrl = songsRootPath + '\\' + file.name;
+                    const localBlobUrl = URL.createObjectURL(file);
+                    
+                    songs.push({
+                        title: file.name,
+                        url: remoteUrl
+                    });
+                    
+                    // We keep a local copy with the blob URL so the uploader can play it instantly
+                    localSongs.push({
+                        title: file.name,
+                        url: remoteUrl,
+                        localUrl: localBlobUrl
+                    });
+                    console.log(`🎵 [FILES] Added song metadata: ${file.name}`);
+                }
+            }
+
+            console.log(`📊 [FILES] Created ${songs.length} song metadata objects`);
+
+            // Send songs to all users in the room
+            sendSongsToRoom(songs);
+
+            // Update local available songs immediately with blob URLs
+            availableSongs = localSongs;
+
+            filteredSongs = availableSongs.slice();
+            renderSongList();
+            console.log(`✅ [FILES] Loaded ${availableSongs.length} audio files\n`);
+            document.getElementById('playlistMessage').textContent = `Loaded ${availableSongs.length} audio files.`;
+        }
+
+        function subscribeToSongsTopic() {
+            if (!stompClient || !stompClient.connected || !currentRoomId) {
+                console.warn('⚠️ [SONGS] Cannot subscribe: STOMP not connected or no room ID');
+                return;
+            }
+
+            const destination = `/topic/room/${currentRoomId}/songs`;
+            console.log('📢 [SONGS] Subscribing to songs topic:', destination);
+
+            stompClient.subscribe(destination, function (message) {
+                console.log('📩 [SONGS] Received songs message');
+                try {
+                    const data = JSON.parse(message.body);
+                    console.log('📊 [SONGS] Received songs data:', data);
+
+                    let rawSongs = Array.isArray(data) ? data : (data.songs || []);
+                    availableSongs = rawSongs.map(s => {
+                        let extractedTitle = s.title || s.name || s.songName || s.fileName;
+                        let finalUrl = s.url;
+
+                        // If title is missing, try to extract the file name from the URL
+                        if (!extractedTitle && finalUrl) {
+                            try {
+                                let tempUrl = finalUrl;
+                                if (tempUrl.includes('path=')) {
+                                    tempUrl = decodeURIComponent(tempUrl.split('path=')[1]);
+                                }
+                                const parts = tempUrl.split(/[\\/]/);
+                                extractedTitle = parts[parts.length - 1] || 'Unknown Song';
+                            } catch (e) {
+                                extractedTitle = 'Unknown Song';
+                            }
+                        } else if (!extractedTitle) {
+                            extractedTitle = 'Unknown Song';
+                        }
+
+                        // If url is just a file path (not http/blob), wrap it for frontend loading
+                        if (finalUrl && !finalUrl.startsWith('http') && !finalUrl.startsWith('blob:')) {
+                            finalUrl = `${getActiveBaseUrl()}/files?path=${encodeURIComponent(finalUrl)}`;
+                        }
+
+                        // Preserve local blob URL if we already have it
+                        const existingLocalSong = availableSongs.find(localSong => localSong.title === extractedTitle && localSong.localUrl);
+
+                        return {
+                            title: extractedTitle,
+                            url: finalUrl,
+                            localUrl: existingLocalSong ? existingLocalSong.localUrl : null
+                        };
+                    });
+                    filteredSongs = availableSongs.slice();
+                    renderSongList();
+
+                    console.log(`✅ [SONGS] Updated available songs: ${availableSongs.length} songs`);
+                    document.getElementById('playlistMessage').textContent = `Updated! ${availableSongs.length} songs available in room.`;
+                } catch (e) {
+                    console.error('❌ [SONGS] Error parsing songs message:', e);
+                }
+            });
+        }
+
+        function sendSongsToRoom(songs) {
+            if (!stompClient || !stompClient.connected || !currentRoomId) {
+                console.warn('⚠️ [SONGS] Cannot send songs: STOMP not connected or no room ID');
+                return;
+            }
+
+            const destination = `/app/loadSongs/${currentRoomId}`;
+            const payload = JSON.stringify(songs);
+
+            console.log('📤 [SONGS] Sending songs to:', destination);
+            console.log('📦 [SONGS] Payload:', payload);
+            stompClient.send(destination, {}, payload);
+            console.log('✅ [SONGS] Songs sent to room');
+        }
+
+
+
+        function renderSongList() {
+            console.log(`📋 [UI] Rendering song list with ${filteredSongs.length} songs`);
+            const container = document.getElementById('songList');
+            container.innerHTML = '';
+            if (!filteredSongs.length) {
+                console.log('ℹ️ [UI] No songs to render in song list');
+                container.textContent = 'No songs found.';
+                return;
+            }
+            filteredSongs.forEach((song, index) => {
+                const row = document.createElement('div');
+                row.style.marginBottom = '8px';
+                row.innerHTML = `${index + 1}. ${song.title} <button onclick="playSong(${index})">Play</button> <button onclick="addSongToPlaylist(${index})">Add to Playlist</button>`;
+                container.appendChild(row);
+            });
+        }
+
+        function renderPlaylists() {
+            console.log(`📋 [UI] Rendering playlists (${playlists.length} total)`);
+            const container = document.getElementById('playlistList');
+            container.innerHTML = '';
+            if (!playlists.length) {
+                console.log('ℹ️ [UI] No playlists available to render');
+                container.textContent = 'No playlists yet.';
+                return;
+            }
+            playlists.forEach((playlist, index) => {
+                const section = document.createElement('div');
+                section.style.marginBottom = '14px';
+                section.innerHTML = `<strong>${playlist.name}</strong> (<span>${playlist.songs.length}</span> songs) <button onclick="selectPlaylist(${index})">Open</button>`;
+                const list = document.createElement('div');
+                list.style.marginTop = '6px';
+                playlist.songs.forEach((song, songIndex) => {
+                    const songRow = document.createElement('div');
+                    songRow.style.marginBottom = '4px';
+                    songRow.innerHTML = `${songIndex + 1}. ${song.title} <button onclick="playPlaylistSong(${index}, ${songIndex})">Play</button>`;
+                    list.appendChild(songRow);
+                });
+                section.appendChild(list);
+                container.appendChild(section);
+            });
+        }
+
+        function createPlaylist() {
+            const name = document.getElementById('playlistName').value.trim();
+            console.log(`📝 [PLAYLIST] Create playlist clicked with name: "${name}"`);
+            const message = document.getElementById('playlistMessage');
+            if (!name) {
+                console.warn('⚠️ [PLAYLIST] Cannot create playlist: name is empty');
+                message.textContent = 'Enter a playlist name first.';
+                return;
+            }
+            if (playlists.some(pl => pl.name === name)) {
+                console.warn(`⚠️ [PLAYLIST] Cannot create playlist: name "${name}" already exists`);
+                message.textContent = 'Playlist name already exists.';
+                return;
+            }
+            playlists.push({ name, songs: [] });
+            console.log(`✅ [PLAYLIST] Created new playlist: "${name}"`);
+            document.getElementById('playlistName').value = '';
+            message.textContent = `Playlist "${name}" created.`;
+            renderPlaylists();
+        }
+
+        function addSongToPlaylist(songIndex) {
+            console.log(`➕ [PLAYLIST] Attempting to add song at index ${songIndex} to playlist`);
+            if (!playlists.length) {
+                console.warn('⚠️ [PLAYLIST] No playlist exists to add the song to');
+                document.getElementById('playlistMessage').textContent = 'Create a playlist first.';
+                return;
+            }
+            const song = filteredSongs[songIndex];
+            playlists[0].songs.push(song);
+            console.log(`✅ [PLAYLIST] Added "${song.title}" to playlist: "${playlists[0].name}"`);
+            document.getElementById('playlistMessage').textContent = `Added "${song.title}" to playlist ${playlists[0].name}.`;
+            renderPlaylists();
+        }
+
+        function selectPlaylist(index) {
+            console.log(`👆 [PLAYLIST] Selected playlist index: ${index}`);
+            currentPlaylist = playlists[index];
+            console.log(`📋 [PLAYLIST] Current playlist set to: "${currentPlaylist.name}"`);
+            document.getElementById('playlistMessage').textContent = `Selected playlist: ${currentPlaylist.name}`;
+        }
+
+        function playPlaylistSong(playlistIndex, songIndex) {
+            console.log(`▶️ [PLAYLIST] Play playlist song clicked - Playlist Index: ${playlistIndex}, Song Index: ${songIndex}`);
+            const playlist = playlists[playlistIndex];
+            const song = playlist.songs[songIndex];
+            if (!song) {
+                console.warn('❌ [PLAYLIST] Song not found in playlist');
+                return;
+            }
+            console.log(`🎵 [PLAYLIST] Playing song: "${song.title}" from playlist: "${playlist.name}"`);
+            currentPlaylist = playlist;
+            currentSongIndex = songIndex;
+            playTrack(song);
+        }
+
+        function playSong(index) {
+            console.log(`🔊 [PLAYER] Play song clicked - Index: ${index}`);
+            const song = filteredSongs[index];
+            if (!song) {
+                console.warn('❌ [PLAYER] Song not found at index:', index);
+                return;
+            }
+            console.log(`🎵 [PLAYER] Playing song: ${song.title}`);
+            currentPlaylist = null;
+            currentSongIndex = index;
+            playTrack(song);
+        }
+
+        function playTrack(song) {
+            console.log(`🔊 [PLAYER] Starting playback of: ${song.title}`);
+            document.getElementById('currentTrack').textContent = song.title;
+            currentTrackUrl = song.url;
+            
+            // Prefer local blob URL if it exists, otherwise fallback to the remote URL
+            audio.src = song.localUrl || song.url;
+            
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => {
+                    console.log('▶️ [PLAYER] Play button state changed');
+                    document.getElementById('playPauseButton').textContent = '⏸';
+                    broadcastSync('play', song.url);
+                }).catch(error => {
+                    console.error('❌ [PLAYER] Playback failed:', error);
+                    console.error(`❌ [PLAYER] URL tried: ${audio.src}`);
+                    // Still broadcast so others can try, but keep our UI paused
+                    broadcastSync('play', song.url);
+                });
+            } else {
+                document.getElementById('playPauseButton').textContent = '⏸';
+                broadcastSync('play', song.url);
+            }
+        }
+
+        function togglePlay() {
+            if (audio.paused) {
+                console.log('🔊 [PLAYER] Resuming playback');
+                const playPromise = audio.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(() => {
+                        document.getElementById('playPauseButton').textContent = '⏸';
+                        broadcastSync('play');
+                    }).catch(error => {
+                        console.error('❌ [PLAYER] Toggle play failed:', error);
+                        broadcastSync('play');
+                    });
+                } else {
+                    document.getElementById('playPauseButton').textContent = '⏸';
+                    broadcastSync('play');
+                }
+            } else {
+                console.log('🔊 [PLAYER] Pausing playback');
+                audio.pause();
+                document.getElementById('playPauseButton').textContent = '▶';
+                broadcastSync('pause');
+            }
+        }
+
+        function prevTrack() {
+            console.log('⏮️ [PLAYER] Previous track clicked');
+            if (currentPlaylist && currentSongIndex > 0) {
+                currentSongIndex -= 1;
+                const song = currentPlaylist.songs[currentSongIndex];
+                console.log(`🎵 [PLAYER] Playing previous track: ${song.title}`);
+                playTrack(song);
+            } else {
+                console.warn('⚠️ [PLAYER] Cannot go to previous track');
+            }
+        }
+
+        function nextTrack() {
+            console.log('⏭️ [PLAYER] Next track clicked');
+            if (currentPlaylist && currentSongIndex + 1 < currentPlaylist.songs.length) {
+                currentSongIndex += 1;
+                const song = currentPlaylist.songs[currentSongIndex];
+                console.log(`🎵 [PLAYER] Playing next track: ${song.title}`);
+                playTrack(song);
+            } else {
+                console.warn('⚠️ [PLAYER] Cannot go to next track');
+            }
+        }
+
+        function stopTrack() {
+            console.log('⏹️ [PLAYER] Stop track clicked');
+            audio.pause();
+            audio.currentTime = 0;
+            console.log('🔊 [PLAYER] Playback stopped');
+            document.getElementById('playPauseButton').textContent = '▶';
+            broadcastSync('stop');
+        }
+
+        function updateProgress() {
+            if (!audio.duration) return;
+            const progress = (audio.currentTime / audio.duration) * 100;
+            document.getElementById('progressBar').value = progress;
+            document.getElementById('timeLabel').textContent = `${formatTime(audio.currentTime)} / ${formatTime(audio.duration)}`;
+        }
+
+        function seekTrack(event) {
+            const seekTime = (event.target.value / 100) * audio.duration;
+            console.log(`🔊 [PLAYER] Seeking to: ${formatTime(seekTime)}`);
+            if (!audio.duration) return;
+            const percent = event.target.value;
+            audio.currentTime = (percent / 100) * audio.duration;
+            broadcastSync('seek');
+        }
+
+        function setVolume(event) {
+            const volume = parseFloat(event.target.value);
+            audio.volume = volume;
+            console.log(`🔊 [PLAYER] Volume changed to: ${(volume * 100).toFixed(0)}%`);
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${mins}:${secs}`;
+        }
+
+        function searchSongs() {
+            const query = document.getElementById('searchInput').value.trim().toLowerCase();
+            console.log(`🔍 [SEARCH] Searching for: "${query}"`);
+            if (!query) {
+                filteredSongs = availableSongs.slice();
+                console.log(`🎵 [SEARCH] Showing all ${availableSongs.length} songs`);
+            } else {
+                filteredSongs = availableSongs.filter(song => (song.title || '').toLowerCase().includes(query));
+                console.log(`🎵 [SEARCH] Found ${filteredSongs.length} matching songs`);
+            }
+            renderSongList();
+        }
+
+        function goBack() {
+            console.log('🔙 [NAVIGATION] Navigating back to index.html');
+            if (currentRoomId && currentUserId && currentRoomId !== 'unknown') {
+                const removePath = `/room/removeUser?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
+                console.log('🚪 [API] POST request to remove user:', removePath);
+                
+                fetchWithFallback(removePath, {
+                    method: 'POST',
+                    mode: 'cors',
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                }).then(() => {
+                    // Trigger a broadcast to update remaining users in the room
+                    requestUserCount();
+                    
+                    // Small delay to ensure the STOMP message is sent before the connection closes
+                    setTimeout(() => {
+                        window.location.href = 'index.html';
+                    }, 200);
+                }).catch(error => {
+                    console.error('❌ [API] Failed to remove user:', error);
+                    window.location.href = 'index.html';
+                });
+            } else {
+                window.location.href = 'index.html';
+            }
+        }
+
+        window.addEventListener('load', initPage);
+
+        window.addEventListener('beforeunload', function () {
+            if (currentRoomId && currentUserId && currentRoomId !== 'unknown') {
+                const removePath = `/room/removeUser?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
+                console.log('🚪 [EVENT] Page unloading, removing user:', removePath);
+                
+                // Try to trigger a broadcast to update remaining users in the room
+                requestUserCount();
+                
+                // Use fetch with keepalive to ensure request completes during unload
+                fetch(getActiveBaseUrl() + removePath, {
+                    method: 'POST',
+                    keepalive: true,
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    }
+                }).catch(err => console.error('Error on unload:', err));
+            }
+        });
+    </script>
+</body>
+
+</html>

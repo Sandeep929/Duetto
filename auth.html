@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Room Music Player - Auth</title>
+    <script src="api.js"></script>
+</head>
+<body>
+
+<div>
+    <button onclick="switchTab('login')">Login</button>
+    <button onclick="switchTab('register')">Register</button>
+
+    <div id="message"></div>
+
+    <!-- Login Form -->
+    <div id="login">
+        <h2>Login</h2>
+        <form onsubmit="handleLogin(event)">
+            <div>
+                <label for="loginUserId">User ID:</label>
+                <input type="text" id="loginUserId" required>
+            </div>
+            <div>
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" required>
+            </div>
+            <button onclick="handleLogin">Login</button>
+            <!-- <button onclick="testLogin()">Test Login</button> -->
+        </form>
+    </div>
+
+    <!-- Register Form -->
+    <div id="register" style="display: none;">
+        <h2>Register</h2>
+        <form onsubmit="handleRegister(event)">
+            <div>
+                <label for="registerUserId">User ID:</label>
+                <input type="text" id="registerUserId" required>
+            </div>
+            <div>
+                <label for="registerPassword">Password:</label>
+                <input type="password" id="registerPassword" required>
+            </div>
+            <div>
+                <label for="registerConfirm">Confirm Password:</label>
+                <input type="password" id="registerConfirm" required>
+            </div>
+            <button onclick="handleRegister">Register</button>
+        </form>
+    </div>
+</div>
+
+<script>
+function switchTab(tab) {
+    console.log(`🔄 [UI] Switching to tab: ${tab}`);
+    // Hide all sections
+    document.getElementById('login').style.display = 'none';
+    document.getElementById('register').style.display = 'none';
+    
+    // Show selected section
+    document.getElementById(tab).style.display = 'block';
+    
+    // Clear message
+    clearMessage();
+}
+
+function showMessage(text, type) {
+    console.log(`💬 [UI] Showing message: "${text}" (type: ${type || 'default'})`);
+    const messageDiv = document.getElementById('message');
+    messageDiv.textContent = text;
+}
+
+function clearMessage() {
+    console.log('🧹 [UI] Clearing message display');
+    const messageDiv = document.getElementById('message');
+    messageDiv.textContent = '';
+}
+
+function handleLogin(event) {
+    event.preventDefault();
+    
+    const userId = document.getElementById('loginUserId').value;
+    const password = document.getElementById('loginPassword').value;
+    
+    // Validate inputs
+    if (!userId || !password) {
+        showMessage('Please fill in all fields');
+        return;
+    }
+    
+    // Send GET request to login endpoint
+    const loginPath = `/auth/login?userId=${encodeURIComponent(userId)}&pass=${encodeURIComponent(password)}`;
+    console.log('Sending login request to path:', loginPath);
+    
+    fetchWithFallback(loginPath, {
+        method: 'GET',
+        mode: 'cors',
+        headers: {
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+        }
+    })
+    .then(response => {
+        console.log('Login response status:', response.status, response.statusText);
+        if (response.ok) {
+            return response.text().then(data => {
+                console.log('Login response body:', data);
+                return data;
+            });
+        } else {
+            return response.text().then(text => {
+                console.error('Login response text:', text);
+                throw new Error(`Login failed with status ${response.status}: ${text}`);
+            });
+        }
+    })
+    .then(data => {
+        showMessage(`Successfully logged in as ${userId}. Redirecting...`);
+        
+        // Store user info in localStorage
+        localStorage.setItem('user', JSON.stringify({ userId, loggedIn: true }));
+        
+        // Redirect after 2 seconds
+        setTimeout(() => {
+            window.location.href = 'index.html';
+        }, 2000);
+    })
+    .catch(error => {
+        console.error('Login error:', error);
+        showMessage('Login failed. Please check your credentials. ' + error.message);
+    });
+}
+
+function handleRegister(event) {
+    event.preventDefault();
+    
+    const userId = document.getElementById('registerUserId').value;
+    const password = document.getElementById('registerPassword').value;
+    const confirm = document.getElementById('registerConfirm').value;
+    
+    // Validate inputs
+    if (!userId || !password || !confirm) {
+        showMessage('Please fill in all fields');
+        return;
+    }
+    
+    if (password !== confirm) {
+        showMessage('Passwords do not match');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showMessage('Password must be at least 6 characters');
+        return;
+    }
+    
+    // Send POST request to register endpoint
+    const registerPath = '/auth/register';
+    
+    console.log('Sending register request to path:', registerPath);
+    console.log('Body:', JSON.stringify({ userId, pass: password }));
+    
+    fetchWithFallback(registerPath, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'ngrok-skip-browser-warning': 'true'
+        },
+        body: JSON.stringify({ userId, pass: password })
+    })
+    .then(response => {
+        console.log('Register response status:', response.status, response.statusText);
+        if (response.ok) {
+            return response.json().then(data => {
+                console.log('Register response body:', data);
+                return data;
+            });
+        } else {
+            return response.text().then(text => {
+                console.error('Register response text:', text);
+                throw new Error(`Registration failed with status ${response.status}: ${text}`);
+            });
+        }
+    })
+    .then(data => {
+        console.log('Register success:', data);
+        showMessage(`Account created successfully! Redirecting to login...`);
+        
+        // Reset form
+        event.target.reset();
+        
+        // Redirect after 2 seconds
+        setTimeout(() => {
+            switchTab('login');
+            clearMessage();
+        }, 2000);
+    })
+    .catch(error => {
+        console.error('Registration error:', error);
+        showMessage('Registration failed: ' + error.message);
+    });
+}
+
+// function testLogin() {
+
+//     fetch("http://localhost:8080/auth/login?userId=Sandeep&pass=123456")
+//     .then(res => res.text())
+//     .then(data => {
+//         console.log(data);
+//         alert(data);
+//     })
+//     .catch(err => {
+//         console.error(err);
+//         alert(err);
+//     });
+// }
+</script>
+
+</body>
+</html>

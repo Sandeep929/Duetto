@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>STOMP Test</title>
+    <script src="api.js"></script>
+</head>
+<body>
+
+<div id="userInfo" style="padding: 10px; background-color: #f0f0f0; margin-bottom: 20px;">
+    <strong>Logged in as:</strong> <span id="userId">Guest</span>
+    <button onclick="logout()" style="float: right;">Logout</button>
+</div>
+
+<h2>WebSocket STOMP Test</h2>
+<button onclick="createRoom()">Create Room</button>
+<button onclick="joinRoom()">Join Room</button>
+<div>
+    <label for="roomIdInput">Room ID:</label>
+    <input type="text" id="roomIdInput" placeholder="Enter room id" style="width: 300px;">
+</div>
+<div id="messages" style="margin-top: 20px;">
+    <h3>Received Messages</h3>
+    <div id="messageList"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
+
+<script>
+let stompClient = null;
+let currentRoomId = null;
+const defaultRoomId = 'ab25e259-bb6c-4e1e-b2b9-bd3e5af01bc4';
+
+function showMessage(text) {
+    console.log(`💬 [UI] Showing global message: "${text}"`);
+    let messageArea = document.getElementById('messageArea');
+    if (!messageArea) {
+        messageArea = document.createElement('div');
+        messageArea.id = 'messageArea';
+        messageArea.style.color = 'red';
+        messageArea.style.marginBottom = '10px';
+        document.body.insertBefore(messageArea, document.body.firstChild);
+    }
+    messageArea.textContent = text;
+}
+
+function checkLogin() {
+    console.log('🔍 [EVENT] Checking login status...');
+    const user = localStorage.getItem('user');
+    if (user) {
+        const userData = JSON.parse(user);
+        console.log('✅ [LOGIN] User logged in:', userData.userId);
+        document.getElementById('userId').textContent = userData.userId;
+    } else {
+        console.warn('❌ [LOGIN] No user logged in, redirecting to auth.html');
+        showMessage('Please log in first');
+        setTimeout(() => {
+            window.location.href = 'auth.html';
+        }, 1000);
+    }
+}
+
+function logout() {
+    console.log('🚪 [EVENT] User logging out...');
+    localStorage.removeItem('user');
+    console.log('✅ [LOGOUT] User data cleared, redirecting to auth.html');
+    window.location.href = 'auth.html';
+}
+
+function connect() {
+    console.log('🔗 [STOMP] Initiating WebSocket connection...');
+    connectStompClientWithFallback(function(stompClientArg, frame) {
+        stompClient = stompClientArg;
+        console.log("✅ [STOMP] Connected: " + frame);
+        const roomId = currentRoomId || defaultRoomId;
+        subscribeRoom(roomId);
+    });
+}
+
+function subscribeRoom(roomId) {
+    console.log(`📢 [STOMP] Attempting to subscribe to room: ${roomId}`);
+    if (!roomId) {
+        console.warn('⚠️ [STOMP] No room ID provided for subscription.');
+        return;
+    }
+    const destination = `/topic/room/${roomId}/sync`;
+    console.log('📢 [STOMP] Subscribing to destination:', destination);
+    stompClient.subscribe(destination, function(message) {
+        displayReceivedMessage(message);
+    });
+}
+
+function createRoom() {
+    console.log('🛠️ [EVENT] Create room button clicked');
+    const user = localStorage.getItem('user');
+    if (!user) {
+        console.warn('❌ [CREATE ROOM] No user logged in');
+        alert('Please log in first');
+        return;
+    }
+    const userData = JSON.parse(user);
+    const userId = userData.userId;
+    console.log('👤 [CREATE ROOM] User ID:', userId);
+    
+    const createPath = `/room/create?hostId=${encodeURIComponent(userId)}`;
+    console.log('📡 [API] POST request to path:', createPath);
+    
+    fetchWithFallback(createPath, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+            'ngrok-skip-browser-warning': 'true'
+        }
+    })
+    .then(response => {
+        console.log('📥 [API] Create room response status:', response.status);
+        return response.text().then(text => {
+            console.log('📥 [API] Create room response body:', text);
+            if (!response.ok) {
+                throw new Error(`Failed to create room: ${response.status} - ${text}`);
+            }
+            try {
+                return JSON.parse(text);
+            } catch (e) {
+                return text.trim();
+            }
+        });
+    })
+    .then(data => {
+        console.log('✅ [CREATE ROOM] Room created successfully:', data);
+        const roomId = (typeof data === 'object' ? (data.roomId || data.id || '') : data);
+        console.log('🆔 [CREATE ROOM] Room ID:', roomId);
+        currentRoomId = roomId;
+        document.getElementById('roomIdInput').value = roomId;
+        alert(`Room created! Room ID: ${roomId}`);
+    })
+    .catch(error => {
+        console.error('❌ [CREATE ROOM] Error:', error);
+        alert('Failed to create room: ' + error.message);
+    });
+}
+
+function joinRoom() {
+    console.log('🛠️ [EVENT] Join room button clicked');
+    const roomId = document.getElementById('roomIdInput').value.trim();
+    if (!roomId) {
+        console.warn('❌ [JOIN ROOM] No room ID provided');
+        alert('Enter a room ID to join.');
+        return;
+    }
+    console.log('🆔 [JOIN ROOM] Room ID:', roomId);
+    
+    const user = localStorage.getItem('user');
+    if (!user) {
+        console.warn('❌ [JOIN ROOM] No user logged in');
+        alert('Please log in first');
+        return;
+    }
+    const userData = JSON.parse(user);
+    const userId = userData.userId;
+    console.log('👤 [JOIN ROOM] User ID:', userId);
+    
+    const joinPath = `/room/join?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`;
+    console.log('📡 [API] POST request to path:', joinPath);
+    
+    fetchWithFallback(joinPath, {
+        method: 'POST',
+        mode: 'cors',
+        headers: {
+            'ngrok-skip-browser-warning': 'true'
+        }
+    })
+    .then(response => {
+        console.log('📥 [API] Join room response status:', response.status);
+        return response.text().then(text => {
+            console.log('📥 [API] Join room response body:', text);
+            if (response.ok) {
+                try {
+                    return JSON.parse(text);
+                } catch (e) {
+                    return text;
+                }
+            } else {
+                throw new Error(`Failed to join room: ${response.status} - ${text}`);
+            }
+        });
+    })
+    .then(data => {
+        console.log('✅ [JOIN ROOM] Successfully joined room:', data);
+        currentRoomId = roomId;
+        localStorage.setItem('joinedRoomId', roomId);
+        localStorage.setItem('roomUserId', userId);
+        sessionStorage.setItem('justJoined', 'true');
+        console.log('💾 [STORAGE] Saved joinedRoomId:', roomId);
+        console.log('🔀 [NAVIGATION] Redirecting to room-player.html');
+        window.location.href = `room-player.html?roomId=${encodeURIComponent(roomId)}`;
+    })
+    .catch(error => {
+        console.error('❌ [JOIN ROOM] Error:', error);
+        alert('Failed to join room: ' + error.message);
+    });
+}
+
+function displayReceivedMessage(message) {
+    console.log('📨 [MESSAGE] Received message from STOMP');
+    let payload = message.body;
+    let parsed = null;
+    let sender = "unknown";
+    let sessionId = message.headers && (message.headers['sessionId'] || message.headers['simpSessionId'] || message.headers['session-id']) ?
+        (message.headers['sessionId'] || message.headers['simpSessionId'] || message.headers['session-id']) : "not available";
+
+    try {
+        parsed = JSON.parse(payload);
+        if (parsed.sender) {
+            sender = parsed.sender;
+        }
+        if (parsed.sessionId) {
+            sessionId = parsed.sessionId;
+        }
+    } catch (err) {
+        console.warn('Unable to parse STOMP message body as JSON:', err);
+    }
+
+    const messageList = document.getElementById('messageList');
+    const item = document.createElement('div');
+    item.style.padding = '8px 10px';
+    item.style.border = '1px solid #ddd';
+    item.style.marginBottom = '8px';
+    item.style.borderRadius = '4px';
+    item.innerHTML = `
+        <strong>From:</strong> ${escapeHtml(sender)}<br>
+        <strong>Session ID:</strong> ${escapeHtml(sessionId)}<br>
+        <strong>Message:</strong> ${escapeHtml(payload)}
+    `;
+    messageList.prepend(item);
+    console.log('Received from', sender, 'session', sessionId, ':', payload);
+}
+
+function escapeHtml(text) {
+    return String(text)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function sendMessage() {
+    console.log('📤 [STOMP] Sending test message to room sync topic...');
+    stompClient.send("/app/sync/ab25e259-bb6c-4e1e-b2b9-bd3e5af01bc4", {}, JSON.stringify({
+        action: "play",
+        time: 5,
+        message: "Hello from frontend",
+        sender: "u1"
+    }));
+    console.log('✅ [STOMP] Test message sent');
+}
+
+// Check login on page load
+window.addEventListener('load', checkLogin);
+</script>
+
+</body>
+</html>
