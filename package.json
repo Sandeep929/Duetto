@@ -1,0 +1,7 @@
+{
+    "name": "my-frontend-app",
+    "version": "1.0.0",
+    "scripts": {
+        "build": "echo 'No build step needed for vanilla HTML/CSS/JS'"
+    }
+}
