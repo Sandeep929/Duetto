@@ -3,7 +3,7 @@
  * This file imports and initializes the @vercel/analytics package
  */
 
-import { inject } from './node_modules/@vercel/analytics/dist/index.mjs';
+import { inject } from '@vercel/analytics';
 
 // Initialize Vercel Analytics
 inject();
