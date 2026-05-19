@@ -1,10 +1,10 @@
 const hostname = window.location.hostname;
-const localApiEndpoint = (hostname === 'localhost' || hostname === '127.0.0.1') 
-    ? 'http://localhost:8080' 
+const localApiEndpoint = (hostname === 'localhost' || hostname === '127.0.0.1')
+    ? 'http://localhost:8080'
     : `http://${hostname}:8080`;
 
-const localWsEndpoint = (hostname === 'localhost' || hostname === '127.0.0.1') 
-    ? 'ws://localhost:8080/ws' 
+const localWsEndpoint = (hostname === 'localhost' || hostname === '127.0.0.1')
+    ? 'ws://localhost:8080/ws'
     : `ws://${hostname}:8080/ws`;
 
 const API_ENDPOINTS = [
@@ -30,7 +30,7 @@ function getActiveBaseUrl() {
  */
 async function fetchWithFallback(path, options = {}) {
     let lastError = null;
-    
+
     // Ensure path starts with a slash
     const normalizedPath = path.startsWith('/') ? path : '/' + path;
 
@@ -38,18 +38,18 @@ async function fetchWithFallback(path, options = {}) {
         const idx = (activeEndpointIndex + i) % API_ENDPOINTS.length;
         const baseUrl = API_ENDPOINTS[idx];
         const url = baseUrl + normalizedPath;
-        
+
         try {
             console.log(`[API] Trying fetch: ${url}`);
             const response = await fetch(url, options);
-            
+
             // If the fetch returns a server error like 502/504 (common with ngrok when down)
             if (response.status === 502 || response.status === 504) {
                 console.warn(`[API] Endpoint ${baseUrl} returned ${response.status}, trying next...`);
                 lastError = new Error(`HTTP ${response.status}`);
                 continue;
             }
-            
+
             // For network success, update active index
             activeEndpointIndex = idx;
             return response;
@@ -58,7 +58,7 @@ async function fetchWithFallback(path, options = {}) {
             lastError = error;
         }
     }
-    
+
     console.error('[API] All HTTP endpoints failed.');
     throw lastError || new Error('All endpoints failed');
 }
@@ -79,10 +79,10 @@ function connectStompClientWithFallback(onConnect, onError) {
         const idx = (activeEndpointIndex + attempt) % WS_ENDPOINTS.length;
         const wsUrl = WS_ENDPOINTS[idx];
         console.log(`[STOMP] Trying WebSocket connection to ${wsUrl}`);
-        
+
         const socket = new WebSocket(wsUrl);
         const stompClient = Stomp.over(socket);
-        
+
         // Connect STOMP client
         stompClient.connect({}, function (frame) {
             console.log(`[STOMP] Successfully connected to ${wsUrl}`);
