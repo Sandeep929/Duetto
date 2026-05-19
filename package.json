@@ -3,5 +3,8 @@
     "version": "1.0.0",
     "scripts": {
         "build": "echo 'No build step needed for vanilla HTML/CSS/JS'"
+    },
+    "dependencies": {
+        "@vercel/analytics": "^2.0.1"
     }
 }
