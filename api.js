@@ -9,12 +9,12 @@ const localWsEndpoint = (hostname === 'localhost' || hostname === '127.0.0.1')
 
 const API_ENDPOINTS = [
     localApiEndpoint,
-    'https://sneakily-nondeafened-faith.ngrok-free.dev'
+    'https://duetto-backend-1.onrender.com'
 ];
 
 const WS_ENDPOINTS = [
     localWsEndpoint,
-    'wss://sneakily-nondeafened-faith.ngrok-free.dev/ws'
+    'wss://duetto-backend-1.onrender.com/ws'
 ];
 
 let activeEndpointIndex = 0;
