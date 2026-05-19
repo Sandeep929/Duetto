@@ -8,12 +8,10 @@ const localWsEndpoint = (hostname === 'localhost' || hostname === '127.0.0.1')
     : `ws://${hostname}:8080/ws`;
 
 const API_ENDPOINTS = [
-    localApiEndpoint,
     'https://duetto-backend-1.onrender.com'
 ];
 
 const WS_ENDPOINTS = [
-    localWsEndpoint,
     'wss://duetto-backend-1.onrender.com/ws'
 ];
 
