@@ -1322,14 +1322,20 @@
                 // Try to trigger a broadcast to update remaining users in the room
                 requestUserCount();
 
-                // Use fetch with keepalive to ensure request completes during unload
-                fetch(getActiveBaseUrl() + removePath, {
-                    method: 'POST',
-                    keepalive: true,
-                    headers: {
-                        'ngrok-skip-browser-warning': 'true'
-                    }
-                }).catch(err => console.error('Error on unload:', err));
+                // Use navigator.sendBeacon for highly reliable delivery during tab/window close
+                const fullUrl = getActiveBaseUrl() + removePath;
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(fullUrl);
+                } else {
+                    // Fallback to fetch with keepalive
+                    fetch(fullUrl, {
+                        method: 'POST',
+                        keepalive: true,
+                        headers: {
+                            'ngrok-skip-browser-warning': 'true'
+                        }
+                    }).catch(err => console.error('Error on unload:', err));
+                }
             }
         });
     </script>
