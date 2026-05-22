@@ -200,3 +200,27 @@ a:hover {
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.3);
 }
+
+/* Text Logo Styles */
+.logo-text {
+    font-weight: 700;
+    letter-spacing: -0.05em;
+    color: var(--primary-color);
+    display: inline-block;
+    text-transform: lowercase;
+}
+
+.logo-text::after {
+    content: '.';
+    color: #ffffff;
+}
+
+.logo-large {
+    font-size: 3rem;
+    margin-bottom: var(--spacing-lg);
+}
+
+.logo-small {
+    font-size: 1.5rem;
+    margin: 0;
+}
