@@ -165,6 +165,57 @@
             height: 50px;
             font-size: 18px;
         }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 15% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: -10px;
+        }
+
+        .close:hover {
+            color: black;
+        }
+
+        .playlist-checkbox-container {
+            margin-top: 15px;
+            margin-bottom: 15px;
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .playlist-checkbox-container label {
+            display: block;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
     </style>
     <script src="api.js"></script>
     <script type="module" src="analytics.js"></script>
@@ -238,6 +289,17 @@
         <button onclick="goBack()">Back to room selection</button>
     </div>
 
+    <div id="playlistModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closePlaylistModal()">&times;</span>
+            <h3>Add to Playlists</h3>
+            <div id="playlistCheckboxes" class="playlist-checkbox-container">
+                <!-- Checkboxes will be injected here -->
+            </div>
+            <button onclick="confirmAddToPlaylists()">Add</button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
     <script>
         const songsRootPath = 'D:\\Duetto Gane';
@@ -270,6 +332,7 @@
                 currentUserId = userData.userId;
                 console.log('👤 [INIT] Current User ID:', userData.userId);
                 document.getElementById('userLabel').textContent = userData.userId;
+                loadUserPlaylists();
             }
 
             document.getElementById('volumeControl').value = 0.8;
@@ -340,17 +403,17 @@
                 .then(data => {
                     console.log('✅ [USER COUNT] Received:', data);
                     const newCount = data.count || data.userCount || 1;
-                    
+
                     // If the count has changed, someone left/joined but we missed the STOMP broadcast.
                     // Ask the backend to broadcast the updated detailed users list.
                     if (userCount !== newCount && stompClient && stompClient.connected) {
                         console.log(`🔄 [USER COUNT] Count changed from ${userCount} to ${newCount}. Requesting broadcast...`);
-                        requestUserCount(); 
+                        requestUserCount();
                     }
-                    
+
                     userCount = newCount;
                     updateUserCounter();
-                    
+
                     if (data.users) {
                         usersInRoom = data.users;
                         updateUsersList();
@@ -404,7 +467,7 @@
 
                     updateUserCounter();
                     updateUsersList();
-                    
+
                     // If a new user joined, broadcast the current state so they can sync up
                     if (userCount > prevUserCount && prevUserCount > 0) {
                         // Only the first user in the room broadcasts to prevent message storms
@@ -595,6 +658,56 @@
             });
         }
 
+        function loadUserPlaylists() {
+            if (!currentUserId) return;
+            console.log('🎵 [INIT] Loading user playlists from API...');
+            fetchWithFallback(`/playList/get-playlists?userId=${encodeURIComponent(currentUserId)}`)
+                .then(res => res.json())
+                .then(data => {
+                    console.log(`✅ [PLAYLIST] Received ${data.length} playlists from API`);
+                    playlists = data.map(pl => ({
+                        id: pl.playlistId,
+                        name: pl.playlistName,
+                        songs: []
+                    }));
+                    renderPlaylists();
+                })
+                .catch(err => {
+                    console.error('❌ [PLAYLIST] Failed to load playlists from API:', err);
+                });
+        }
+
+        function removeSongFromPlaylist(playlistIndex, songIndex) {
+            const playlist = playlists[playlistIndex];
+            const song = playlist.songs[songIndex];
+            if (!song || !song.id) {
+                console.warn('❌ [PLAYLIST] Song missing ID, cannot remove from backend.');
+                return;
+            }
+            fetchWithFallback('/playlist-songs/remove-song', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    playlistId: playlist.id,
+                    userId: currentUserId,
+                    songId: song.id
+                })
+            })
+                .then(res => {
+                    if (res.ok) {
+                        playlist.songs.splice(songIndex, 1);
+                        renderPlaylists();
+                        document.getElementById('playlistMessage').textContent = `Removed "${song.title}" from playlist ${playlist.name}.`;
+                    } else {
+                        document.getElementById('playlistMessage').textContent = 'Failed to remove song.';
+                    }
+                })
+                .catch(err => {
+                    console.error('❌ [PLAYLIST] Error removing song from playlist:', err);
+                    document.getElementById('playlistMessage').textContent = 'Error removing song.';
+                });
+        }
+
         function escapeHtml(text) {
             const map = {
                 '&': '&amp;',
@@ -645,12 +758,12 @@
                 if (file.type.startsWith('audio/')) {
                     const remoteUrl = songsRootPath + '\\' + file.name;
                     const localBlobUrl = URL.createObjectURL(file);
-                    
+
                     songs.push({
                         title: file.name,
                         url: remoteUrl
                     });
-                    
+
                     // We keep a local copy with the blob URL so the uploader can play it instantly
                     localSongs.push({
                         title: file.name,
@@ -765,7 +878,7 @@
             filteredSongs.forEach((song, index) => {
                 const row = document.createElement('div');
                 row.style.marginBottom = '8px';
-                row.innerHTML = `${index + 1}. ${song.title} <button onclick="playSong(${index})">Play</button> <button onclick="addSongToPlaylist(${index})">Add to Playlist</button>`;
+                row.innerHTML = `${index + 1}. ${song.title} <button onclick="playSong(${index})">Play</button> <button onclick="openAddToPlaylistModal(${index})">Add to Playlist</button>`;
                 container.appendChild(row);
             });
         }
@@ -782,15 +895,17 @@
             playlists.forEach((playlist, index) => {
                 const section = document.createElement('div');
                 section.style.marginBottom = '14px';
-                section.innerHTML = `<strong>${playlist.name}</strong> (<span>${playlist.songs.length}</span> songs) <button onclick="selectPlaylist(${index})">Open</button>`;
+                section.innerHTML = `<strong>${playlist.name}</strong> (<span>${playlist.songs ? playlist.songs.length : 0}</span> songs) <button onclick="selectPlaylist(${index})">Open</button>`;
                 const list = document.createElement('div');
                 list.style.marginTop = '6px';
-                playlist.songs.forEach((song, songIndex) => {
-                    const songRow = document.createElement('div');
-                    songRow.style.marginBottom = '4px';
-                    songRow.innerHTML = `${songIndex + 1}. ${song.title} <button onclick="playPlaylistSong(${index}, ${songIndex})">Play</button>`;
-                    list.appendChild(songRow);
-                });
+                if (playlist.songs) {
+                    playlist.songs.forEach((song, songIndex) => {
+                        const songRow = document.createElement('div');
+                        songRow.style.marginBottom = '4px';
+                        songRow.innerHTML = `${songIndex + 1}. ${song.title} <button onclick="playPlaylistSong(${index}, ${songIndex})">Play</button> <button style="background-color: #dc3545;" onclick="removeSongFromPlaylist(${index}, ${songIndex})">Remove</button>`;
+                        list.appendChild(songRow);
+                    });
+                }
                 section.appendChild(list);
                 container.appendChild(section);
             });
@@ -810,32 +925,211 @@
                 message.textContent = 'Playlist name already exists.';
                 return;
             }
-            playlists.push({ name, songs: [] });
-            console.log(`✅ [PLAYLIST] Created new playlist: "${name}"`);
-            document.getElementById('playlistName').value = '';
-            message.textContent = `Playlist "${name}" created.`;
-            renderPlaylists();
+            if (!currentUserId) {
+                message.textContent = 'User not identified.';
+                return;
+            }
+
+            fetchWithFallback('/playList/createPlaylist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUserId, playlistName: name })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    playlists.push({ id: data.playlistId, name: data.playlistName, songs: [] });
+                    console.log(`✅ [PLAYLIST] Created new playlist: "${name}"`);
+                    document.getElementById('playlistName').value = '';
+                    message.textContent = `Playlist "${name}" created.`;
+                    renderPlaylists();
+                })
+                .catch(err => {
+                    console.error('❌ [PLAYLIST] Error creating playlist:', err);
+                    message.textContent = 'Failed to create playlist.';
+                });
         }
 
-        function addSongToPlaylist(songIndex) {
-            console.log(`➕ [PLAYLIST] Attempting to add song at index ${songIndex} to playlist`);
+        let songToAddIndex = -1;
+
+        function openAddToPlaylistModal(songIndex) {
+            console.log(`➕ [PLAYLIST] Opening add to playlist modal for song index ${songIndex}`);
             if (!playlists.length) {
                 console.warn('⚠️ [PLAYLIST] No playlist exists to add the song to');
                 document.getElementById('playlistMessage').textContent = 'Create a playlist first.';
                 return;
             }
+
             const song = filteredSongs[songIndex];
-            playlists[0].songs.push(song);
-            console.log(`✅ [PLAYLIST] Added "${song.title}" to playlist: "${playlists[0].name}"`);
-            document.getElementById('playlistMessage').textContent = `Added "${song.title}" to playlist ${playlists[0].name}.`;
-            renderPlaylists();
+            if (!song.id) {
+                console.warn('❌ [PLAYLIST] Song missing ID, cannot add to backend.');
+                document.getElementById('playlistMessage').textContent = 'Cannot add local song without ID to playlist.';
+                return;
+            }
+
+            songToAddIndex = songIndex;
+            const container = document.getElementById('playlistCheckboxes');
+            container.innerHTML = '';
+
+            playlists.forEach((pl, i) => {
+                const label = document.createElement('label');
+                label.style.display = 'block';
+                label.style.marginBottom = '6px';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = i;
+                checkbox.style.marginRight = '8px';
+
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(pl.name));
+                container.appendChild(label);
+            });
+
+            document.getElementById('playlistModal').style.display = 'block';
+        }
+
+        function closePlaylistModal() {
+            document.getElementById('playlistModal').style.display = 'none';
+            songToAddIndex = -1;
+        }
+
+        function confirmAddToPlaylists() {
+            if (songToAddIndex === -1) return;
+
+            const container = document.getElementById('playlistCheckboxes');
+            const checkboxes = container.querySelectorAll('input[type="checkbox"]:checked');
+
+            if (checkboxes.length === 0) {
+                document.getElementById('playlistMessage').textContent = 'No playlists selected.';
+                closePlaylistModal();
+                return;
+            }
+
+            const song = filteredSongs[songToAddIndex];
+            document.getElementById('playlistMessage').textContent = `Adding "${song.title}" to ${checkboxes.length} playlists...`;
+
+            let addedCount = 0;
+            let errorCount = 0;
+
+            const promises = Array.from(checkboxes).map(checkbox => {
+                const playlistIndex = parseInt(checkbox.value, 10);
+                const targetPlaylist = playlists[playlistIndex];
+
+                return fetchWithFallback('/playlist-songs/add-song', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        playlistId: targetPlaylist.id,
+                        userId: currentUserId,
+                        songId: song.id,
+                        sequence: 0
+                    })
+                })
+                    .then(res => {
+                        if (res.ok) {
+                            addedCount++;
+                            console.log(`✅ [PLAYLIST] Added "${song.title}" to playlist: "${targetPlaylist.name}"`);
+
+                            // Fetch the updated playlist from backend to ensure we don't lose older songs in the UI
+                            return fetchWithFallback(`/playlist-songs/getAllSongs?userId=${encodeURIComponent(currentUserId)}&playlistId=${encodeURIComponent(targetPlaylist.id)}`, {
+                                method: 'GET'
+                            })
+                                .then(resSongs => resSongs.json())
+                                .then(data => {
+                                    targetPlaylist.songs = data.map(s => {
+                                        let extractedTitle = s.title || s.name || s.songName || s.fileName;
+                                        let finalUrl = s.url;
+                                        if (!extractedTitle && finalUrl) {
+                                            try {
+                                                let tempUrl = finalUrl;
+                                                if (tempUrl.includes('path=')) {
+                                                    tempUrl = decodeURIComponent(tempUrl.split('path=')[1]);
+                                                }
+                                                const parts = tempUrl.split(/[\\/]/);
+                                                extractedTitle = parts[parts.length - 1] || 'Unknown Song';
+                                            } catch (e) {
+                                                extractedTitle = 'Unknown Song';
+                                            }
+                                        } else if (!extractedTitle) {
+                                            extractedTitle = 'Unknown Song';
+                                        }
+                                        if (finalUrl && !finalUrl.startsWith('http') && !finalUrl.startsWith('blob:')) {
+                                            finalUrl = `${getActiveBaseUrl()}/files?path=${encodeURIComponent(finalUrl)}`;
+                                        }
+                                        return {
+                                            id: s.id || s.songId,
+                                            publicId: s.publicId,
+                                            title: extractedTitle,
+                                            url: finalUrl
+                                        };
+                                    });
+                                });
+                        } else {
+                            errorCount++;
+                        }
+                    })
+                    .catch(err => {
+                        console.error('❌ [PLAYLIST] Error adding song to playlist:', err);
+                        errorCount++;
+                    });
+            });
+
+            Promise.all(promises).then(() => {
+                renderPlaylists();
+                if (errorCount === 0) {
+                    document.getElementById('playlistMessage').textContent = `Added "${song.title}" to ${addedCount} playlist(s) successfully.`;
+                } else {
+                    document.getElementById('playlistMessage').textContent = `Added "${song.title}" to ${addedCount} playlist(s), failed for ${errorCount}.`;
+                }
+                closePlaylistModal();
+            });
         }
 
         function selectPlaylist(index) {
             console.log(`👆 [PLAYLIST] Selected playlist index: ${index}`);
             currentPlaylist = playlists[index];
             console.log(`📋 [PLAYLIST] Current playlist set to: "${currentPlaylist.name}"`);
-            document.getElementById('playlistMessage').textContent = `Selected playlist: ${currentPlaylist.name}`;
+            document.getElementById('playlistMessage').textContent = `Loading playlist: ${currentPlaylist.name}...`;
+
+            fetchWithFallback(`/playlist-songs/getAllSongs?userId=${encodeURIComponent(currentUserId)}&playlistId=${encodeURIComponent(currentPlaylist.id)}`, {
+                method: 'GET'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    currentPlaylist.songs = data.map(s => {
+                        let extractedTitle = s.title || s.name || s.songName || s.fileName;
+                        let finalUrl = s.url;
+                        if (!extractedTitle && finalUrl) {
+                            try {
+                                let tempUrl = finalUrl;
+                                if (tempUrl.includes('path=')) {
+                                    tempUrl = decodeURIComponent(tempUrl.split('path=')[1]);
+                                }
+                                const parts = tempUrl.split(/[\\/]/);
+                                extractedTitle = parts[parts.length - 1] || 'Unknown Song';
+                            } catch (e) {
+                                extractedTitle = 'Unknown Song';
+                            }
+                        } else if (!extractedTitle) {
+                            extractedTitle = 'Unknown Song';
+                        }
+                        if (finalUrl && !finalUrl.startsWith('http') && !finalUrl.startsWith('blob:')) {
+                            finalUrl = `${getActiveBaseUrl()}/files?path=${encodeURIComponent(finalUrl)}`;
+                        }
+                        return {
+                            id: s.id || s.songId,
+                            publicId: s.publicId,
+                            title: extractedTitle,
+                            url: finalUrl
+                        };
+                    });
+                    document.getElementById('playlistMessage').textContent = `Selected playlist: ${currentPlaylist.name}`;
+                    renderPlaylists();
+                })
+                .catch(err => {
+                    console.error('❌ [PLAYLIST] Error loading playlist songs:', err);
+                    document.getElementById('playlistMessage').textContent = 'Failed to load playlist songs.';
+                });
         }
 
         function playPlaylistSong(playlistIndex, songIndex) {
@@ -869,10 +1163,10 @@
             console.log(`🔊 [PLAYER] Starting playback of: ${song.title}`);
             document.getElementById('currentTrack').textContent = song.title;
             currentTrackUrl = song.url;
-            
+
             // Prefer local blob URL if it exists, otherwise fallback to the remote URL
             audio.src = song.localUrl || song.url;
-            
+
             const playPromise = audio.play();
             if (playPromise !== undefined) {
                 playPromise.then(() => {
@@ -994,7 +1288,7 @@
             if (currentRoomId && currentUserId && currentRoomId !== 'unknown') {
                 const removePath = `/room/removeUser?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
                 console.log('🚪 [API] POST request to remove user:', removePath);
-                
+
                 fetchWithFallback(removePath, {
                     method: 'POST',
                     mode: 'cors',
@@ -1004,7 +1298,7 @@
                 }).then(() => {
                     // Trigger a broadcast to update remaining users in the room
                     requestUserCount();
-                    
+
                     // Small delay to ensure the STOMP message is sent before the connection closes
                     setTimeout(() => {
                         window.location.href = 'index.html';
@@ -1024,10 +1318,10 @@
             if (currentRoomId && currentUserId && currentRoomId !== 'unknown') {
                 const removePath = `/room/removeUser?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
                 console.log('🚪 [EVENT] Page unloading, removing user:', removePath);
-                
+
                 // Try to trigger a broadcast to update remaining users in the room
                 requestUserCount();
-                
+
                 // Use fetch with keepalive to ensure request completes during unload
                 fetch(getActiveBaseUrl() + removePath, {
                     method: 'POST',
