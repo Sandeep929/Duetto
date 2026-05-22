@@ -1,0 +1,105 @@
+/* index.css */
+.dashboard-container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: var(--spacing-xl);
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+    border-bottom: 1px solid var(--bg-glass-border);
+}
+
+.user-profile {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color) 0%, #0d8a3e 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.2rem;
+    color: #fff;
+}
+
+.user-details h3 {
+    border: none;
+    margin: 0;
+    padding: 0;
+    font-size: 1.1rem;
+}
+
+.user-details p {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+.room-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.action-card {
+    padding: var(--spacing-xl);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 250px;
+}
+
+.action-card h2 {
+    font-size: 1.5rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.action-card p {
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.join-form {
+    width: 100%;
+    max-width: 250px;
+}
+
+.join-form .input-control {
+    margin-bottom: var(--spacing-md);
+    text-align: center;
+}
+
+.log-window {
+    max-height: 300px;
+    overflow-y: auto;
+    background: #000;
+    border: 1px solid #333;
+    border-radius: var(--border-radius-sm);
+    padding: var(--spacing-md);
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.85rem;
+}
+
+.log-item {
+    margin-bottom: var(--spacing-sm);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px dashed #333;
+    color: var(--primary-color);
+}
+
+.log-item strong {
+    color: #fff;
+}

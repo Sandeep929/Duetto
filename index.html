@@ -1,27 +1,50 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>STOMP Test</title>
+    <title>STOMP Client - Room Selection</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="global.css">
+    <link rel="stylesheet" href="index.css">
     <script src="api.js"></script>
     <script type="module" src="analytics.js"></script>
 </head>
 <body>
 
-<div id="userInfo" style="padding: 10px; background-color: #f0f0f0; margin-bottom: 20px;">
-    <strong>Logged in as:</strong> <span id="userId">Guest</span>
-    <button onclick="logout()" style="float: right;">Logout</button>
-</div>
+<div class="dashboard-container">
+    <div class="dashboard-header">
+        <div class="user-profile">
+            <div class="user-avatar" id="userAvatar">G</div>
+            <div class="user-details">
+                <h3 id="userId">Guest</h3>
+                <p>Welcome to Duetto</p>
+            </div>
+        </div>
+        <button class="btn btn-danger" onclick="logout()">Logout</button>
+    </div>
 
-<h2>WebSocket STOMP Test</h2>
-<button onclick="createRoom()">Create Room</button>
-<button onclick="joinRoom()">Join Room</button>
-<div>
-    <label for="roomIdInput">Room ID:</label>
-    <input type="text" id="roomIdInput" placeholder="Enter room id" style="width: 300px;">
-</div>
-<div id="messages" style="margin-top: 20px;">
-    <h3>Received Messages</h3>
-    <div id="messageList"></div>
+    <div class="room-actions">
+        <!-- Create Room Card -->
+        <div class="action-card glass-panel">
+            <h2>Create a Room</h2>
+            <p>Start a new synchronized listening session and invite your friends.</p>
+            <button class="btn btn-primary" onclick="createRoom()" style="width: 100%; max-width: 200px;">Create Room</button>
+        </div>
+
+        <!-- Join Room Card -->
+        <div class="action-card glass-panel">
+            <h2>Join a Room</h2>
+            <p>Enter an existing room ID to join a session.</p>
+            <div class="join-form">
+                <input type="text" id="roomIdInput" class="input-control" placeholder="e.g. 1234-abcd-5678">
+                <button class="btn btn-primary" onclick="joinRoom()" style="width: 100%;">Join Room</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="messages" style="margin-top: 20px;">
+        <h3>Event Log</h3>
+        <div id="messageList" class="log-window glass-panel"></div>
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/stompjs/lib/stomp.min.js"></script>
@@ -51,6 +74,9 @@ function checkLogin() {
         const userData = JSON.parse(user);
         console.log('✅ [LOGIN] User logged in:', userData.userId);
         document.getElementById('userId').textContent = userData.userId;
+        const avatarLetter = userData.userId.charAt(0).toUpperCase();
+        const avatarEl = document.getElementById('userAvatar');
+        if(avatarEl) avatarEl.textContent = avatarLetter;
     } else {
         console.warn('❌ [LOGIN] No user logged in, redirecting to auth.html');
         showMessage('Please log in first');
