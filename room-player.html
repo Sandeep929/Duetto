@@ -159,25 +159,37 @@
 
             // When page loads/reloads, make sure backend knows we are here
             if (currentRoomId && currentRoomId !== 'unknown' && currentUserId && !justJoined) {
+                // ── RELOAD PATH ──────────────────────────────────────────────────
+                // 1. Immediately apply whatever we last saved so the UI isn't blank
+                const cached = loadRoomStateFromStorage();
+                if (cached) {
+                    console.log('💾 [INIT] Applying cached room state instantly:', cached);
+                    applyRoomState(cached, false /* no drift compensation on cached state */);
+                }
+
                 const joinPath = `/room/join?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
                 console.log('📡 [API] Re-joining room on page load:', joinPath);
                 fetchWithFallback(joinPath, {
                     method: 'POST',
                     mode: 'cors',
-                    headers: {
-                        'ngrok-skip-browser-warning': 'true'
-                    }
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
                 }).then(() => {
                     fetchRoomUserCount();
                     connectToRoom();
+                    // 2. Fetch fresh server state and reconcile with cache
+                    checkRoomState(false);
                 }).catch(err => {
                     console.error('❌ [INIT] Failed to re-join room:', err);
                     fetchRoomUserCount();
                     connectToRoom();
+                    checkRoomState(false);
                 });
             } else {
+                // ── FRESH JOIN PATH ──────────────────────────────────────────────
                 fetchRoomUserCount();
                 connectToRoom();
+                // Fetch room state and sync the player for the new joiner
+                checkRoomState(true);
             }
 
 
@@ -252,6 +264,147 @@
             });
         }
 
+        // ── ROOM STATE (REST-based, replaces STOMP sync-on-join) ─────────────────
+        const ROOM_STATE_KEY = () => `roomState_${currentRoomId}`;
+
+        function saveRoomStateToStorage(state) {
+            try {
+                localStorage.setItem(ROOM_STATE_KEY(), JSON.stringify(state));
+                console.log('💾 [ROOM STATE] Saved to localStorage:', state);
+            } catch(e) {
+                console.warn('⚠️ [ROOM STATE] Could not save to localStorage:', e);
+            }
+        }
+
+        function loadRoomStateFromStorage() {
+            try {
+                const raw = localStorage.getItem(ROOM_STATE_KEY());
+                return raw ? JSON.parse(raw) : null;
+            } catch(e) {
+                return null;
+            }
+        }
+
+        /**
+         * Fetches the current room state from /room/checkRoomState?roomId=X
+         * @param {boolean} isFreshJoin - true = new joiner, apply with drift compensation
+         *                                false = reload, compare with cache first
+         */
+        function checkRoomState(isFreshJoin) {
+            if (!currentRoomId || currentRoomId === 'unknown') return;
+
+            console.log(`🔍 [ROOM STATE] Fetching server state (freshJoin=${isFreshJoin})`);
+            fetchWithFallback(`/room/checkRoomState?roomId=${encodeURIComponent(currentRoomId)}`, {
+                method: 'GET',
+                mode: 'cors',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(serverState => {
+                console.log('✅ [ROOM STATE] Received from server:', serverState);
+
+                if (!serverState || !serverState.trackId) {
+                    console.log('ℹ️ [ROOM STATE] Room has no active track — nothing to sync.');
+                    return;
+                }
+
+                if (isFreshJoin) {
+                    // Fresh join: apply server state with drift compensation and save it
+                    saveRoomStateToStorage(serverState);
+                    applyRoomState(serverState, true);
+                } else {
+                    // Reload: compare with cached state
+                    const cached = loadRoomStateFromStorage();
+                    const stateChanged = !cached
+                        || cached.trackId    !== serverState.trackId
+                        || cached.playing    !== serverState.playing
+                        || Math.abs((cached.currentTime || 0) - (serverState.currentTime || 0)) > 2;
+
+                    if (stateChanged) {
+                        console.log('🔄 [ROOM STATE] Server state differs from cache — updating & re-syncing.');
+                        saveRoomStateToStorage(serverState);
+                        applyRoomState(serverState, true);
+                    } else {
+                        console.log('✅ [ROOM STATE] Cache matches server — no re-sync needed.');
+                        // Still update the saved timestamp so it stays fresh
+                        saveRoomStateToStorage(serverState);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('❌ [ROOM STATE] Failed to fetch room state:', err);
+            });
+        }
+
+        /**
+         * Applies a room state object to the audio player.
+         * @param {object} state       - { trackId, currentTime, playing, time, ... }
+         * @param {boolean} useDrift   - if true, compensates for elapsed time since state.time
+         */
+        function applyRoomState(state, useDrift) {
+            if (!state || !state.trackId) return;
+
+            const driftSeconds = (useDrift && state.time) ? (Date.now() - state.time) / 1000 : 0;
+            const seekTo = Math.max(0, (state.currentTime || 0) + (state.playing ? driftSeconds : 0));
+
+            console.log(`⏱️ [ROOM STATE] Drift: ${driftSeconds.toFixed(2)}s | SeekTo: ${seekTo.toFixed(2)}s | Playing: ${state.playing}`);
+            isRemoteAction = true;
+
+            const doApply = () => {
+                audio.currentTime = seekTo;
+                updateProgress();
+                if (state.playing) {
+                    const p = audio.play();
+                    if (p !== undefined) p.catch(e => console.warn('⚠️ [ROOM STATE] Autoplay blocked:', e));
+                    document.getElementById('playPauseButton').textContent = '⏸';
+                    console.log(`▶️ [ROOM STATE] Playing from ${seekTo.toFixed(2)}s`);
+                } else {
+                    audio.pause();
+                    document.getElementById('playPauseButton').textContent = '▶';
+                    console.log(`⏸️ [ROOM STATE] Paused at ${seekTo.toFixed(2)}s`);
+                }
+                isRemoteAction = false;
+            };
+
+            if (currentTrackUrl !== state.trackId) {
+                currentTrackUrl = state.trackId;
+                audio.src = state.trackId;
+
+                // Update track title
+                const foundSong = availableSongs.find(s => s.url === state.trackId);
+                if (foundSong) {
+                    document.getElementById('currentTrack').textContent = foundSong.title;
+                } else {
+                    try {
+                        let url = state.trackId;
+                        if (url.includes('path=')) url = decodeURIComponent(url.split('path=')[1]);
+                        const parts = url.split(/[\\/]/);
+                        document.getElementById('currentTrack').textContent = parts[parts.length - 1] || 'Unknown Song';
+                    } catch(e) {}
+                }
+
+                // Wait for audio metadata before seeking
+                const onLoaded = () => {
+                    audio.removeEventListener('loadedmetadata', onLoaded);
+                    audio.removeEventListener('error', onErr);
+                    doApply();
+                };
+                const onErr = () => {
+                    audio.removeEventListener('loadedmetadata', onLoaded);
+                    audio.removeEventListener('error', onErr);
+                    console.error('❌ [ROOM STATE] Failed to load track:', state.trackId);
+                    isRemoteAction = false;
+                };
+                audio.addEventListener('loadedmetadata', onLoaded);
+                audio.addEventListener('error', onErr);
+            } else {
+                doApply();
+            }
+        }
+
         function subscribeToRoom() {
             if (!stompClient || !stompClient.connected || !currentRoomId) {
                 console.warn('⚠️ [SUBSCRIBE] Cannot subscribe: STOMP not connected or no room ID');
@@ -267,25 +420,12 @@
                     const data = JSON.parse(message.body);
                     console.log('📊 [MESSAGE] Users data:', data);
 
-                    const prevUserCount = userCount;
-                    // Update user list and count
                     usersInRoom = data.users || [];
                     userCount = data.userCount || data.count || 1;
                     console.log('👥 [UPDATE] User count:', userCount, 'Users:', usersInRoom);
 
                     updateUserCounter();
                     updateUsersList();
-
-                    // If a new user joined, broadcast the current state so they can sync up
-                    if (userCount > prevUserCount && prevUserCount > 0) {
-                        // Only the first user in the room broadcasts to prevent message storms
-                        if (usersInRoom.length > 0 && usersInRoom[0] === currentUserId) {
-                            if (currentTrackUrl || (audio.src && !audio.src.endsWith('null'))) {
-                                console.log('🔄 [SYNC] New user joined. Broadcasting current state...');
-                                broadcastSync(audio.paused ? 'pause' : 'play');
-                            }
-                        }
-                    }
                 } catch (e) {
                     console.error('❌ [MESSAGE] Error parsing users message:', e);
                 }
@@ -370,6 +510,8 @@
             stompClient.subscribe(destination, function (message) {
                 try {
                     const payload = JSON.parse(message.body);
+
+                    // ── LIVE SYNC (play / pause / seek / stop from other users) ──
                     if (payload.sender === currentUserId) return; // Ignore our own events
 
                     console.log(`📥 [SYNC] Received remote '${payload.action}' event from ${payload.sender}`);
@@ -401,9 +543,15 @@
                     }
 
                     const applyAction = () => {
+                        // Calculate drift at the moment we actually apply —
+                        // this accounts for CDN load time when a new track had to load.
+                        // payload.time is Date.now() captured by the sender in broadcastSync.
+                        const driftSeconds = payload.time ? (Date.now() - payload.time) / 1000 : 0;
+
                         if (payload.action === 'play') {
-                            console.log(`▶️ [SYNC] Executing remote PLAY at ${payload.currentTime}s`);
-                            audio.currentTime = payload.currentTime;
+                            const seekTo = Math.max(0, (payload.currentTime || 0) + driftSeconds);
+                            console.log(`▶️ [SYNC] Remote PLAY | payload.currentTime=${payload.currentTime?.toFixed(2)}s | drift=${driftSeconds.toFixed(2)}s | seekTo=${seekTo.toFixed(2)}s`);
+                            audio.currentTime = seekTo;
                             updateProgress();
                             const playPromise = audio.play();
                             if (playPromise !== undefined) {
@@ -411,20 +559,25 @@
                             }
                             document.getElementById('playPauseButton').textContent = '⏸';
                         } else if (payload.action === 'pause') {
-                            console.log(`⏸️ [SYNC] Executing remote PAUSE at ${payload.currentTime}s`);
+                            // No drift compensation for pause — position doesn't advance while paused
+                            console.log(`⏸️ [SYNC] Remote PAUSE at ${payload.currentTime}s`);
                             audio.pause();
                             audio.currentTime = payload.currentTime;
                             updateProgress();
                             document.getElementById('playPauseButton').textContent = '▶';
                         } else if (payload.action === 'stop') {
-                            console.log(`⏹️ [SYNC] Executing remote STOP`);
+                            console.log(`⏹️ [SYNC] Remote STOP`);
                             audio.pause();
                             audio.currentTime = 0;
                             updateProgress();
                             document.getElementById('playPauseButton').textContent = '▶';
                         } else if (payload.action === 'seek') {
-                            console.log(`⏭️ [SYNC] Executing remote SEEK to ${payload.currentTime}s. Playing: ${payload.playing}`);
-                            audio.currentTime = payload.currentTime;
+                            // If playing after seek, compensate for load delay
+                            const seekTo = payload.playing
+                                ? Math.max(0, (payload.currentTime || 0) + driftSeconds)
+                                : (payload.currentTime || 0);
+                            console.log(`⏭️ [SYNC] Remote SEEK | payload.currentTime=${payload.currentTime?.toFixed(2)}s | drift=${driftSeconds.toFixed(2)}s | seekTo=${seekTo.toFixed(2)}s | playing=${payload.playing}`);
+                            audio.currentTime = seekTo;
                             updateProgress();
                             if (payload.playing) {
                                 const playPromise = audio.play();
@@ -437,6 +590,15 @@
                                 document.getElementById('playPauseButton').textContent = '▶';
                             }
                         }
+                        // Update localStorage so reload stays in sync
+                        saveRoomStateToStorage({
+                            action: payload.action,
+                            trackId: payload.trackId || currentTrackUrl,
+                            currentTime: audio.currentTime,
+                            playing: !audio.paused,
+                            time: Date.now(),
+                            roomId: currentRoomId
+                        });
                         isRemoteAction = false;
                     };
 

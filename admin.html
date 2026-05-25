@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>STOMP Client - Admin Console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="global.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+    <script src="api.js"></script>
+    <style>
+        body {
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+        }
+        .admin-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-xl);
+            padding-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--bg-glass-border);
+        }
+        .admin-title {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .admin-title h1 {
+            font-size: 2.2rem;
+            letter-spacing: -0.03em;
+        }
+        .admin-title p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        section {
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--bg-glass-border);
+            border-radius: var(--border-radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-xl);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.4);
+        }
+        section h2 {
+            font-size: 1.5rem;
+            margin-bottom: var(--spacing-md);
+            border-bottom: 1px solid var(--bg-glass-border);
+            padding-bottom: var(--spacing-sm);
+        }
+        section h3 {
+            font-size: 1.15rem;
+            border-bottom: none;
+            margin-top: var(--spacing-md);
+            margin-bottom: var(--spacing-sm);
+            padding-bottom: 0;
+            color: var(--text-primary);
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-bottom: var(--spacing-lg);
+            border-radius: var(--border-radius-sm);
+            border: 1px solid var(--bg-glass-border);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--bg-glass-border);
+        }
+        th {
+            background-color: rgba(255, 255, 255, 0.03);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        td {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+        tr:last-child td {
+            border-bottom: none;
+        }
+        tr:hover td {
+            background-color: rgba(255, 255, 255, 0.01);
+        }
+        form {
+            display: grid;
+            gap: var(--spacing-md);
+            max-width: 600px;
+            margin-top: var(--spacing-md);
+        }
+        .form-row {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-xs);
+        }
+        .form-row-inline {
+            display: flex;
+            gap: var(--spacing-sm);
+            align-items: flex-end;
+            margin-bottom: var(--spacing-md);
+        }
+        .form-actions {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-sm);
+        }
+        .error {
+            color: var(--danger-color);
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            padding: 12px;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: var(--spacing-md);
+            font-size: 0.9rem;
+        }
+        .success {
+            color: var(--primary-color);
+            background: rgba(29, 185, 84, 0.1);
+            border: 1px solid rgba(29, 185, 84, 0.2);
+            padding: 12px;
+            border-radius: var(--border-radius-sm);
+            margin-bottom: var(--spacing-md);
+            font-size: 0.9rem;
+        }
+        .top-nav {
+            margin-top: 10px;
+        }
+        .top-nav a {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+        
+        /* Drag and Drop Zone */
+        .file-drop-zone {
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: var(--border-radius-md);
+            padding: 40px var(--spacing-md);
+            text-align: center;
+            cursor: pointer;
+            transition: all var(--transition-speed) ease;
+            background: rgba(255, 255, 255, 0.01);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: var(--spacing-sm);
+        }
+        .file-drop-zone:hover, .file-drop-zone.dragover {
+            border-color: var(--primary-color);
+            background: rgba(29, 185, 84, 0.04);
+        }
+        .drop-zone-text {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            font-weight: 500;
+        }
+        .drop-zone-subtext {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+        .drop-icon {
+            font-size: 2rem;
+            color: var(--text-muted);
+            margin-bottom: var(--spacing-xs);
+            transition: color var(--transition-speed) ease;
+        }
+        .file-drop-zone:hover .drop-icon {
+            color: var(--primary-color);
+        }
+        .selected-files-list {
+            margin-top: var(--spacing-md);
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--border-radius-sm);
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: 1px solid var(--bg-glass-border);
+        }
+        .selected-files-list ul {
+            padding-left: 20px;
+            margin-top: var(--spacing-xs);
+        }
+        .selected-files-list li {
+            margin-bottom: var(--spacing-xs);
+        }
+        hr {
+            border: 0;
+            height: 1px;
+            background: var(--bg-glass-border);
+            margin: var(--spacing-lg) 0;
+        }
+        .btn-group {
+            display: flex;
+            gap: 6px;
+        }
+        .badge {
+            background-color: var(--primary-color);
+            color: #000;
+            padding: 2px 8px;
+            border-radius: var(--border-radius-full);
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="admin-header">
+        <div class="admin-title">
+            <div class="logo-text logo-small">Duetto</div>
+            <h1>Admin Console</h1>
+            <p>Manage users, active rooms, and system-wide audio files.</p>
+        </div>
+        <div class="top-nav">
+            <a href="index.html" class="btn">&larr; Dashboard</a>
+        </div>
+    </div>
+
+    <!-- SECTION 1: Registered Users Management (Real API) -->
+    <section id="users-section">
+        <h2>Registered Users Management</h2>
+        <div id="user-status-msg"></div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <span id="selected-users-count-label" style="color: var(--text-secondary); font-size: 0.9rem;">0 users selected</span>
+            <div class="btn-group">
+                <button id="delete-selected-users-btn" class="btn btn-danger" onclick="deleteSelectedUsers()" disabled style="opacity: 0.4; cursor: not-allowed;">Delete Selected</button>
+                <button onclick="fetchUsers()" class="btn">Refresh</button>
+            </div>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 40px; text-align: center;">
+                            <input type="checkbox" id="select-all-users" title="Select All" onchange="toggleSelectAllUsers(this.checked)" style="cursor: pointer; width: 16px; height: 16px;">
+                        </th>
+                        <th>User ID</th>
+                        <th>Password</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <tr><td colspan="4" style="text-align:center;">Loading users...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Add / Edit User</h3>
+        <form id="user-form" onsubmit="saveUser(event)">
+            <input type="hidden" id="edit-user-original-id">
+            <div class="form-row">
+                <label for="user-id-input" class="form-label">User ID:</label>
+                <input type="text" id="user-id-input" class="input-control" required placeholder="e.g. admin">
+            </div>
+            <div class="form-row">
+                <label for="user-pass-input" class="form-label">Password:</label>
+                <input type="text" id="user-pass-input" class="input-control" required placeholder="e.g. password123">
+            </div>
+            <div class="form-actions">
+                <button type="submit" id="user-submit-btn" class="btn btn-primary">Add User</button>
+                <button type="button" onclick="resetUserForm()" class="btn">Clear / Cancel</button>
+            </div>
+        </form>
+    </section>
+
+    <!-- SECTION 2: Room Management & Live Monitoring (Real API) -->
+    <section id="rooms-section">
+        <h2>Room Management & Live Monitoring</h2>
+        <div id="room-status-msg"></div>
+
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+            <button onclick="fetchRooms()" class="btn">Refresh</button>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Room ID</th>
+                        <th>Host ID</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="rooms-table-body">
+                    <tr><td colspan="3" style="text-align:center;">Loading rooms...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <h3>Create / Edit Room</h3>
+        <form id="room-form" onsubmit="saveRoom(event)">
+            <div class="form-row">
+                <label for="room-host-id-input" class="form-label">Host ID:</label>
+                <input type="text" id="room-host-id-input" class="input-control" required placeholder="e.g. admin">
+            </div>
+            <div class="form-actions">
+                <button type="submit" id="room-submit-btn" class="btn btn-primary">Create Room</button>
+                <button type="button" onclick="resetRoomForm()" class="btn">Clear / Cancel</button>
+            </div>
+        </form>
+
+        <hr>
+
+        <h3>Live Users and Stats in Room</h3>
+        <div class="form-row-inline">
+            <div style="flex-grow: 1;">
+                <label for="monitor-room-id" class="form-label">Monitor Room ID:</label>
+                <input type="text" id="monitor-room-id" class="input-control" placeholder="Enter Room ID to check live info">
+            </div>
+            <button onclick="checkLiveRoomStats()" class="btn btn-primary" style="height: 48px;">Check Live Stats</button>
+        </div>
+        
+        <div id="live-room-results" style="margin-top: 15px; display: none; padding: 15px; background-color: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.15); border-radius: var(--border-radius-sm);">
+            <p style="margin-bottom: 8px;"><strong>Total Users Joined:</strong> <span id="live-users-count" class="badge">-</span></p>
+            <p style="margin-bottom: 8px;"><strong>Live Users List:</strong></p>
+            <ul id="live-users-list" style="padding-left: 20px;">
+                <!-- Live users list will be injected here -->
+            </ul>
+        </div>
+        <div id="live-room-error" style="margin-top: 10px;"></div>
+    </section>
+
+    <!-- SECTION 3: Song Database Management (Real API details) -->
+    <section id="songs-section">
+        <h2>Song Database Management</h2>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md); flex-wrap: wrap; gap: var(--spacing-sm);">
+            <p><strong>Total songs in system (Real API):</strong> <span id="total-songs-count" class="badge">Loading...</span></p>
+            <button onclick="fetchSongsDatabase()" class="btn">Refresh Songs Database</button>
+        </div>
+
+        <hr>
+
+        <h3>Upload Songs</h3>
+        <div id="upload-status-msg"></div>
+        <form id="upload-form" onsubmit="handleRealUpload(event)">
+            <div class="file-drop-zone" id="file-drop-zone">
+                <span class="drop-icon">📁</span>
+                <span class="drop-zone-text">Drag & drop audio files here or click to select</span>
+                <span class="drop-zone-subtext">Supports .mp3, .wav, .m4a etc. (Uploads multiple files)</span>
+                <input type="file" id="song-file-input" accept="audio/*" multiple required style="display: none;">
+            </div>
+            <div id="selected-files-list" class="selected-files-list" style="display: none;"></div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 10px; max-width: 200px;">Upload Songs</button>
+        </form>
+
+        <hr>
+
+        <h3>Song Removal</h3>
+        <div id="song-remove-status-msg"></div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+            <span id="selected-count-label" style="color: var(--text-secondary); font-size: 0.9rem;">0 songs selected</span>
+            <button id="remove-selected-btn" class="btn btn-danger" onclick="removeSelectedSongs()" disabled style="opacity: 0.4; cursor: not-allowed;">Remove Selected</button>
+        </div>
+        <div class="table-container" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;">
+            <table style="margin-bottom: 0;">
+                <thead>
+                    <tr>
+                        <th style="width: 40px; text-align: center;">
+                            <input type="checkbox" id="select-all-songs" title="Select All" onchange="toggleSelectAll(this.checked)" style="cursor: pointer; width: 16px; height: 16px;">
+                        </th>
+                        <th>Title</th>
+                        <th>URL Path</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="songs-table-body">
+                    <tr>
+                        <td colspan="4" style="text-align: center;">Loading available songs list...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <hr>
+
+        <h3>Top 5 Most Played Songs (Mock Data / Temporary String)</h3>
+        <div class="table-container" style="max-width: 600px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 80px;">Rank</th>
+                        <th>Song Title</th>
+                        <th style="width: 150px; text-align: right;">Simulated Plays</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>1</td>
+                        <td>Dil Se.mp3 (Mock String)</td>
+                        <td style="text-align: right;">1,245</td>
+                    </tr>
+                    <tr>
+                        <td>2</td>
+                        <td>Kabira.mp3 (Mock String)</td>
+                        <td style="text-align: right;">987</td>
+                    </tr>
+                    <tr>
+                        <td>3</td>
+                        <td>Kun Faya Kun.mp3 (Mock String)</td>
+                        <td style="text-align: right;">854</td>
+                    </tr>
+                    <tr>
+                        <td>4</td>
+                        <td>Kesariya.mp3 (Mock String)</td>
+                        <td style="text-align: right;">712</td>
+                    </tr>
+                    <tr>
+                        <td>5</td>
+                        <td>Tum Hi Ho.mp3 (Mock String)</td>
+                        <td style="text-align: right;">643</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <script>
+        // ============================================================
+        // --- 1. USER MANAGEMENT (Real API) ---
+        // ============================================================
+        let loadedUsers = [];
+
+        function fetchUsers() {
+            const tbody = document.getElementById('users-table-body');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading users...</td></tr>';
+            fetchWithFallback('/auth/getAllUsers', {
+                method: 'GET', mode: 'cors',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
+            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+            .then(data => {
+                loadedUsers = data;
+                rerenderUsersTable();
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="4" class="error" style="text-align:center;">Failed to load users: ${err.message}</td></tr>`;
+            });
+        }
+
+        function rerenderUsersTable() {
+            const tbody = document.getElementById('users-table-body');
+            tbody.innerHTML = '';
+            if (loadedUsers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No users found.</td></tr>';
+                updateSelectedUsersCount();
+                return;
+            }
+            loadedUsers.forEach((user, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="text-align:center;">
+                        <input type="checkbox" class="user-row-checkbox" data-index="${index}"
+                            onchange="updateSelectedUsersCount()"
+                            style="cursor:pointer; width:16px; height:16px;">
+                    </td>
+                    <td>${escapeHtml(user.userId)}</td>
+                    <td>${escapeHtml(user.pass)}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm" onclick="editUser(${index})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteSingleUser(${index})">Delete</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            updateSelectedUsersCount();
+        }
+
+        function toggleSelectAllUsers(checked) {
+            document.querySelectorAll('.user-row-checkbox').forEach(cb => cb.checked = checked);
+            updateSelectedUsersCount();
+        }
+
+        function updateSelectedUsersCount() {
+            const checkboxes = document.querySelectorAll('.user-row-checkbox');
+            const checked = Array.from(checkboxes).filter(cb => cb.checked);
+            const label = document.getElementById('selected-users-count-label');
+            const btn = document.getElementById('delete-selected-users-btn');
+            const selectAll = document.getElementById('select-all-users');
+            label.textContent = `${checked.length} user${checked.length !== 1 ? 's' : ''} selected`;
+            btn.disabled = checked.length === 0;
+            btn.style.opacity = checked.length > 0 ? '1' : '0.4';
+            btn.style.cursor = checked.length > 0 ? 'pointer' : 'not-allowed';
+            if (selectAll) {
+                if (checked.length === 0) { selectAll.indeterminate = false; selectAll.checked = false; }
+                else if (checked.length === checkboxes.length) { selectAll.indeterminate = false; selectAll.checked = true; }
+                else { selectAll.indeterminate = true; }
+            }
+        }
+
+        function saveUser(event) {
+            event.preventDefault();
+            const userId = document.getElementById('user-id-input').value.trim();
+            const pass = document.getElementById('user-pass-input').value.trim();
+            const msgDiv = document.getElementById('user-status-msg');
+            const isEdit = !!document.getElementById('edit-user-original-id').value;
+
+            msgDiv.innerHTML = `<div style="color:var(--primary-color);font-weight:500;padding:12px;">${isEdit ? 'Updating' : 'Creating'} user...</div>`;
+
+            fetchWithFallback('/auth/register', {
+                method: 'POST', mode: 'cors',
+                headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+                body: JSON.stringify({ userId, pass })
+            })
+            .then(async res => {
+                if (!res.ok) { const t = await res.text(); throw new Error(t || `HTTP ${res.status}`); }
+                msgDiv.innerHTML = `<div class="success">User "${escapeHtml(userId)}" ${isEdit ? 'updated' : 'created'} successfully.</div>`;
+                resetUserForm();
+                fetchUsers();
+            })
+            .catch(err => {
+                msgDiv.innerHTML = `<div class="error">Failed: ${err.message}</div>`;
+            });
+        }
+
+        function editUser(index) {
+            const user = loadedUsers[index];
+            if (!user) return;
+            document.getElementById('edit-user-original-id').value = user.userId;
+            document.getElementById('user-id-input').value = user.userId;
+            document.getElementById('user-pass-input').value = user.pass;
+            document.getElementById('user-submit-btn').textContent = 'Update User';
+        }
+
+        function deleteSingleUser(index) {
+            const cb = document.querySelector(`.user-row-checkbox[data-index="${index}"]`);
+            if (cb) cb.checked = true;
+            updateSelectedUsersCount();
+            deleteSelectedUsers();
+        }
+
+        function deleteSelectedUsers() {
+            const checked = document.querySelectorAll('.user-row-checkbox:checked');
+            if (checked.length === 0) return;
+            const selectedUsers = Array.from(checked).map(cb => loadedUsers[parseInt(cb.dataset.index)]).filter(Boolean);
+            if (!confirm(`Delete ${selectedUsers.length} user(s)? This cannot be undone.`)) return;
+
+            const msgDiv = document.getElementById('user-status-msg');
+            msgDiv.innerHTML = `<div style="color:var(--primary-color);font-weight:500;padding:12px;">Deleting ${selectedUsers.length} user(s)...</div>`;
+
+            // Build indexed query params: users[0].userId=..&users[0].pass=..
+            const params = new URLSearchParams();
+            selectedUsers.forEach((u, i) => {
+                params.append(`users[${i}].userId`, u.userId || '');
+                params.append(`users[${i}].pass`,   u.pass   || '');
+            });
+
+            fetchWithFallback(`/auth/deleteUser?${params.toString()}`, {
+                method: 'DELETE', mode: 'cors',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
+            .then(async res => {
+                if (!res.ok) { const t = await res.text(); throw new Error(t || `HTTP ${res.status}`); }
+                msgDiv.innerHTML = `<div class="success">Deleted ${selectedUsers.length} user(s) successfully.</div>`;
+                const removedIds = new Set(selectedUsers.map(u => u.userId));
+                loadedUsers = loadedUsers.filter(u => !removedIds.has(u.userId));
+                const sa = document.getElementById('select-all-users');
+                if (sa) { sa.checked = false; sa.indeterminate = false; }
+                rerenderUsersTable();
+                resetUserForm();
+            })
+            .catch(err => {
+                msgDiv.innerHTML = `<div class="error">Delete failed: ${err.message}</div>`;
+            });
+        }
+
+        function resetUserForm() {
+            document.getElementById('edit-user-original-id').value = '';
+            document.getElementById('user-id-input').value = '';
+            document.getElementById('user-pass-input').value = '';
+            document.getElementById('user-submit-btn').textContent = 'Add User';
+        }
+
+
+        // ============================================================
+        // --- 2. ROOM MANAGEMENT (Real API) ---
+        // ============================================================
+        let loadedRooms = [];
+
+        function fetchRooms() {
+            const tbody = document.getElementById('rooms-table-body');
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Loading rooms...</td></tr>';
+            fetchWithFallback('/room/getAllRooms', {
+                method: 'GET', mode: 'cors',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
+            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+            .then(data => {
+                loadedRooms = data;
+                rerenderRoomsTable();
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="2" class="error" style="text-align:center;">Failed to load rooms: ${err.message}</td></tr>`;
+            });
+        }
+
+        function rerenderRoomsTable() {
+            const tbody = document.getElementById('rooms-table-body');
+            tbody.innerHTML = '';
+            if (loadedRooms.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No rooms found.</td></tr>';
+                return;
+            }
+            loadedRooms.forEach((room, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td><code>${escapeHtml(room.roomId || room.id || '')}</code></td>
+                    <td>${escapeHtml(room.hostId || room.host || '-')}</td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm" onclick="editRoom(${index})">Edit</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteRoom(${index})">Delete</button>
+                            <button class="btn btn-sm" onclick="selectRoomToMonitor('${escapeHtml(room.roomId || room.id || '')}')">Monitor</button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function saveRoom(event) {
+            event.preventDefault();
+            const hostId = document.getElementById('room-host-id-input').value.trim();
+            const msgDiv = document.getElementById('room-status-msg');
+
+            msgDiv.innerHTML = `<div style="color:var(--primary-color);font-weight:500;padding:12px;">Creating room...</div>`;
+
+            fetchWithFallback(`/room/create?hostId=${encodeURIComponent(hostId)}`, {
+                method: 'POST', mode: 'cors',
+                headers: { 'ngrok-skip-browser-warning': 'true' }
+            })
+            .then(async res => {
+                if (!res.ok) { const t = await res.text(); throw new Error(t || `HTTP ${res.status}`); }
+                msgDiv.innerHTML = `<div class="success">Room created successfully for host "${escapeHtml(hostId)}".</div>`;
+                resetRoomForm();
+                fetchRooms();
+            })
+            .catch(err => {
+                msgDiv.innerHTML = `<div class="error">Failed: ${err.message}</div>`;
+            });
+        }
+
+        function editRoom(index) {
+            const room = loadedRooms[index];
+            if (!room) return;
+            document.getElementById('room-host-id-input').value = room.hostId || room.host || '';
+            document.getElementById('room-submit-btn').textContent = 'Create Room';
+        }
+
+        function deleteRoom(index) {
+            const room = loadedRooms[index];
+            if (!room) return;
+            const id = room.roomId || room.id || '';
+            if (!confirm(`Delete room "${id}"?`)) return;
+
+            const msgDiv = document.getElementById('room-status-msg');
+            msgDiv.innerHTML = `<div style="color:var(--primary-color);font-weight:500;padding:12px;">Deleting room...</div>`;
+
+            fetchWithFallback('/room/deleteRoom', {
+                method: 'DELETE', mode: 'cors',
+                headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
+                body: JSON.stringify({ roomId: id })
+            })
+            .then(async res => {
+                if (!res.ok) { const t = await res.text(); throw new Error(t || `HTTP ${res.status}`); }
+                msgDiv.innerHTML = `<div class="success">Room "${escapeHtml(id)}" deleted successfully.</div>`;
+                loadedRooms.splice(index, 1);
+                rerenderRoomsTable();
+                resetRoomForm();
+            })
+            .catch(err => {
+                msgDiv.innerHTML = `<div class="error">Delete failed: ${err.message}</div>`;
+            });
+        }
+
+        function resetRoomForm() {
+            document.getElementById('room-host-id-input').value = '';
+            document.getElementById('room-submit-btn').textContent = 'Create Room';
+        }
+
+        // Setup Drag & Drop and File Selection listeners
+        function setupUploadListeners() {
+            const dropZone = document.getElementById('file-drop-zone');
+            const fileInput = document.getElementById('song-file-input');
+            const selectedFilesList = document.getElementById('selected-files-list');
+
+            if (!dropZone || !fileInput) return;
+
+            dropZone.addEventListener('click', () => fileInput.click());
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                dropZone.classList.add('dragover');
+            });
+
+            dropZone.addEventListener('dragleave', () => {
+                dropZone.classList.remove('dragover');
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                dropZone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) {
+                    fileInput.files = e.dataTransfer.files;
+                    updateSelectedFilesList();
+                }
+            });
+
+            fileInput.addEventListener('change', updateSelectedFilesList);
+
+            function updateSelectedFilesList() {
+                const files = fileInput.files;
+                const msgDiv = document.getElementById('upload-status-msg');
+                msgDiv.innerHTML = ''; // Clear previous status
+                
+                if (files.length === 0) {
+                    selectedFilesList.innerHTML = '';
+                    selectedFilesList.style.display = 'none';
+                    return;
+                }
+                
+                selectedFilesList.style.display = 'block';
+                let html = '<strong>Selected files for upload:</strong><ul>';
+                for (let i = 0; i < files.length; i++) {
+                    html += `<li>${escapeHtml(files[i].name)} (${(files[i].size / (1024 * 1024)).toFixed(2)} MB)</li>`;
+                }
+                html += '</ul>';
+                selectedFilesList.innerHTML = html;
+            }
+        }
+
+        function selectRoomToMonitor(roomId) {
+            document.getElementById('monitor-room-id').value = roomId;
+            checkLiveRoomStats();
+        }
+
+        // Admin STOMP client — one connection per room check, disconnected after receiving data
+        let adminStompClient = null;
+        let adminStompSubscription = null;
+
+        function disconnectAdminStomp() {
+            if (adminStompSubscription) {
+                try { adminStompSubscription.unsubscribe(); } catch(e) {}
+                adminStompSubscription = null;
+            }
+            if (adminStompClient && adminStompClient.connected) {
+                try { adminStompClient.disconnect(); } catch(e) {}
+            }
+            adminStompClient = null;
+        }
+
+        function checkLiveRoomStats() {
+            const roomId = document.getElementById('monitor-room-id').value.trim();
+            const resultsDiv = document.getElementById('live-room-results');
+            const errorDiv = document.getElementById('live-room-error');
+
+            resultsDiv.style.display = 'none';
+            errorDiv.innerHTML = '';
+
+            if (!roomId) {
+                errorDiv.innerHTML = '<div class="error">Please enter a Room ID to monitor.</div>';
+                return;
+            }
+
+            // Disconnect any previous admin STOMP session first
+            disconnectAdminStomp();
+
+            errorDiv.innerHTML = '<div style="color:var(--primary-color);font-weight:500;padding:12px;">Connecting via WebSocket...</div>';
+            console.log(`[Admin STOMP] Connecting to check live stats for room: ${roomId}`);
+
+            connectStompClientWithFallback(
+                function(stompClient, frame) {
+                    adminStompClient = stompClient;
+                    console.log('[Admin STOMP] Connected:', frame);
+
+                    // Subscribe to the room users topic — same as room-player.html
+                    const topic = `/topic/room/${roomId}/users`;
+                    console.log('[Admin STOMP] Subscribing to:', topic);
+
+                    adminStompSubscription = stompClient.subscribe(topic, function(message) {
+                        console.log('[Admin STOMP] Received message on', topic);
+                        try {
+                            const data = JSON.parse(message.body);
+                            console.log('[Admin STOMP] Users data:', data);
+
+                            const count = data.userCount || data.count || 0;
+                            const users = data.users || [];
+
+                            // Render results
+                            errorDiv.innerHTML = '';
+                            resultsDiv.style.display = 'block';
+                            document.getElementById('live-users-count').textContent = count;
+
+                            const usersListUl = document.getElementById('live-users-list');
+                            usersListUl.innerHTML = '';
+                            if (users.length === 0) {
+                                usersListUl.innerHTML = '<li>No users live in this room currently</li>';
+                            } else {
+                                users.forEach(username => {
+                                    const li = document.createElement('li');
+                                    li.textContent = username;
+                                    usersListUl.appendChild(li);
+                                });
+                            }
+                        } catch(e) {
+                            console.error('[Admin STOMP] Error parsing message:', e);
+                            errorDiv.innerHTML = `<div class="error">Error parsing response: ${e.message}</div>`;
+                        }
+                    });
+
+                    // Send user count request — same destination as room-player.html
+                    const destination = `/app/userCount/${roomId}`;
+                    const payload = JSON.stringify({ roomId, userId: 'admin' });
+                    console.log('[Admin STOMP] Sending request to:', destination, '| Payload:', payload);
+                    stompClient.send(destination, {}, payload);
+                },
+                function(error) {
+                    console.error('[Admin STOMP] Connection failed:', error);
+                    errorDiv.innerHTML = `<div class="error">WebSocket connection failed: ${error}</div>`;
+                }
+            );
+        }
+
+
+        // --- 3. SONG DATABASE LOGIC (Real fetch & real upload & mock remove) ---
+        let loadedSongs = [];
+
+        function fetchSongsDatabase() {
+            const totalSpan = document.getElementById('total-songs-count');
+            const tbody = document.getElementById('songs-table-body');
+            totalSpan.textContent = 'Loading...';
+            tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Fetching latest song database...</td></tr>';
+
+            // Real API Call: /songs/getLocalSongs
+            console.log('[Admin] Requesting songs list from /songs/getLocalSongs');
+            fetchWithFallback('/songs/getLocalSongs')
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                console.log(`[Admin] Received ${data.length} songs from server`);
+                loadedSongs = data;
+                totalSpan.textContent = data.length;
+
+                tbody.innerHTML = '';
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No songs in the database.</td></tr>';
+                    return;
+                }
+
+                data.forEach((song, index) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="song-row-checkbox" data-index="${index}"
+                                onchange="updateSelectedCount()"
+                                style="cursor: pointer; width: 16px; height: 16px;">
+                        </td>
+                        <td>${escapeHtml(song.title || 'Untitled Song')}</td>
+                        <td><code>${escapeHtml(song.url || 'No URL')}</code></td>
+                        <td>
+                            <button class="btn btn-danger btn-sm" onclick="removeSong(${index})">Remove</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                console.error('[Admin] Failed to load song database:', err);
+                totalSpan.textContent = 'Error loading count';
+                tbody.innerHTML = `<tr><td colspan="3" class="error" style="text-align: center;">Failed to load songs: ${err.message}</td></tr>`;
+            });
+        }
+
+        function handleRealUpload(event) {
+            event.preventDefault();
+            const fileInput = document.getElementById('song-file-input');
+            const files = fileInput.files;
+            const msgDiv = document.getElementById('upload-status-msg');
+            const selectedFilesList = document.getElementById('selected-files-list');
+
+            if (!files || files.length === 0) {
+                msgDiv.innerHTML = '<div class="error">Please select or drop at least one file first.</div>';
+                return;
+            }
+
+            console.log(`[Admin] Attempting to upload ${files.length} file(s)`);
+            msgDiv.innerHTML = '<div style="color: var(--primary-color); font-weight: 500; padding: 12px;">Uploading songs... Please wait.</div>';
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('song', files[i]);
+            }
+
+            fetchWithFallback('/songs/upload', {
+                method: 'POST',
+                mode: 'cors',
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: formData
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || `HTTP ${response.status}`);
+                }
+                try {
+                    return await response.json();
+                } catch(e) {
+                    return await response.text();
+                }
+            })
+            .then(data => {
+                console.log('[Admin] Upload successful, response:', data);
+                msgDiv.innerHTML = `<div class="success">Successfully uploaded ${files.length} song(s)!</div>`;
+                fileInput.value = '';
+                if (selectedFilesList) {
+                    selectedFilesList.innerHTML = '';
+                    selectedFilesList.style.display = 'none';
+                }
+                // Refresh song database to display new songs
+                fetchSongsDatabase();
+            })
+            .catch(error => {
+                console.error('[Admin] Upload failed:', error);
+                msgDiv.innerHTML = `<div class="error">Upload failed: ${error.message}</div>`;
+            });
+        }
+
+        function removeSong(index) {
+            const song = loadedSongs[index];
+            if (!song) {
+                console.error('[Admin] Song not found at index:', index);
+                return;
+            }
+
+            const msgDiv = document.getElementById('song-remove-status-msg');
+            console.log(`[Admin] Removing song via real API: id="${song.id}", title="${song.title}"`);
+            msgDiv.innerHTML = `<div style="color: var(--primary-color); font-weight: 500; padding: 12px;">Removing "${escapeHtml(song.title || 'song')}"... Please wait.</div>`;
+
+            // Build @RequestParam indexed query params: songs[0].id=..&songs[0].publicId=..etc
+            const params = new URLSearchParams();
+            params.append('songs[0].id',       song.id       || '');
+            params.append('songs[0].publicId',  song.publicId || '');
+            params.append('songs[0].Title',     song.title    || '');
+            params.append('songs[0].url',       song.url      || '');
+
+            fetchWithFallback(`/songs/removeSongs?${params.toString()}`, {
+                method: 'DELETE',
+                mode: 'cors',
+                headers: {
+                    'ngrok-skip-browser-warning': 'true'
+                }
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || `HTTP ${response.status}`);
+                }
+                console.log(`[Admin] Song "${song.title}" removed successfully`);
+                msgDiv.innerHTML = `<div class="success">Successfully removed: <strong>${escapeHtml(song.title || 'Untitled Song')}</strong></div>`;
+
+                // Remove from local list and re-render
+                loadedSongs.splice(index, 1);
+                document.getElementById('total-songs-count').textContent = loadedSongs.length;
+                rerenderSongsTable();
+            })
+            .catch(error => {
+                console.error('[Admin] Failed to remove song:', error);
+                msgDiv.innerHTML = `<div class="error">Failed to remove song: ${error.message}</div>`;
+            });
+        }
+
+        function toggleSelectAll(checked) {
+            const checkboxes = document.querySelectorAll('.song-row-checkbox');
+            checkboxes.forEach(cb => cb.checked = checked);
+            updateSelectedCount();
+        }
+
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('.song-row-checkbox');
+            const checked = Array.from(checkboxes).filter(cb => cb.checked);
+            const label = document.getElementById('selected-count-label');
+            const btn = document.getElementById('remove-selected-btn');
+            const selectAll = document.getElementById('select-all-songs');
+
+            label.textContent = `${checked.length} song${checked.length !== 1 ? 's' : ''} selected`;
+
+            if (checked.length > 0) {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            } else {
+                btn.disabled = true;
+                btn.style.opacity = '0.4';
+                btn.style.cursor = 'not-allowed';
+            }
+
+            // Update select-all indeterminate state
+            if (selectAll) {
+                if (checked.length === 0) {
+                    selectAll.indeterminate = false;
+                    selectAll.checked = false;
+                } else if (checked.length === checkboxes.length) {
+                    selectAll.indeterminate = false;
+                    selectAll.checked = true;
+                } else {
+                    selectAll.indeterminate = true;
+                }
+            }
+        }
+
+        function removeSong(index) {
+            // Single song removal - delegates to bulk removal with one item
+            const checkbox = document.querySelector(`.song-row-checkbox[data-index="${index}"]`);
+            if (checkbox) checkbox.checked = true;
+            updateSelectedCount();
+            removeSelectedSongs();
+        }
+
+        function removeSelectedSongs() {
+            const checkboxes = document.querySelectorAll('.song-row-checkbox:checked');
+            if (checkboxes.length === 0) return;
+
+            const selectedIndices = Array.from(checkboxes).map(cb => parseInt(cb.dataset.index));
+            const selectedSongs = selectedIndices.map(i => loadedSongs[i]).filter(Boolean);
+
+            if (selectedSongs.length === 0) return;
+
+            const msgDiv = document.getElementById('song-remove-status-msg');
+            console.log(`[Admin] Removing ${selectedSongs.length} song(s) via real API`);
+            msgDiv.innerHTML = `<div style="color: var(--primary-color); font-weight: 500; padding: 12px;">Removing ${selectedSongs.length} song(s)... Please wait.</div>`;
+
+            // Build JSON request body for @RequestBody List<Song>
+            const requestBody = selectedSongs.map(song => ({
+                id:       song.id       || '',
+                publicId: song.publicId || '',
+                Title:    song.title    || '',
+                url:      song.url      || ''
+            }));
+
+            fetchWithFallback('/songs/removeSongs', {
+                method: 'DELETE',
+                mode: 'cors',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                body: JSON.stringify(requestBody)
+            })
+            .then(async response => {
+                if (!response.ok) {
+                    const text = await response.text();
+                    throw new Error(text || `HTTP ${response.status}`);
+                }
+                console.log(`[Admin] ${selectedSongs.length} song(s) removed successfully`);
+                msgDiv.innerHTML = `<div class="success">Successfully removed ${selectedSongs.length} song(s).</div>`;
+
+                // Remove from local list by IDs
+                const removedIds = new Set(selectedSongs.map(s => s.id));
+                loadedSongs = loadedSongs.filter(s => !removedIds.has(s.id));
+                document.getElementById('total-songs-count').textContent = loadedSongs.length;
+
+                // Reset select-all
+                const selectAll = document.getElementById('select-all-songs');
+                if (selectAll) { selectAll.checked = false; selectAll.indeterminate = false; }
+
+                rerenderSongsTable();
+                updateSelectedCount();
+            })
+            .catch(error => {
+                console.error('[Admin] Failed to remove songs:', error);
+                msgDiv.innerHTML = `<div class="error">Failed to remove song(s): ${error.message}</div>`;
+            });
+        }
+
+        function rerenderSongsTable() {
+            const tbody = document.getElementById('songs-table-body');
+            tbody.innerHTML = '';
+            if (loadedSongs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No songs in the database.</td></tr>';
+                return;
+            }
+            loadedSongs.forEach((song, index) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td style="text-align: center;">
+                        <input type="checkbox" class="song-row-checkbox" data-index="${index}"
+                            onchange="updateSelectedCount()"
+                            style="cursor: pointer; width: 16px; height: 16px;">
+                    </td>
+                    <td>${escapeHtml(song.title || 'Untitled Song')}</td>
+                    <td><code>${escapeHtml(song.url || 'No URL')}</code></td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" onclick="removeSong(${index})">Remove</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // --- HELPER FUNCTIONS ---
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // --- ON PAGE LOAD ---
+        window.addEventListener('load', () => {
+            fetchUsers();
+            fetchRooms();
+            fetchSongsDatabase();
+            setupUploadListeners();
+        });
+    </script>
+</body>
+</html>
