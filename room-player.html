@@ -21,8 +21,17 @@
             
             <div class="room-info">
                 <strong>Room ID</strong>
-                <p id="roomLabel">unknown</p>
-                <strong>User</strong>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                    <p id="roomLabel" style="margin-bottom: 0;">unknown</p>
+                    <button onclick="copyRoomId()" title="Copy Room ID" style="background: none; border: none; padding: 4px; cursor: pointer; color: var(--text-muted); display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s ease; border-radius: 4px;" onmouseover="this.style.color='var(--text-primary)'; this.style.backgroundColor='rgba(255,255,255,0.05)';" onmouseout="this.style.color='var(--text-muted)'; this.style.backgroundColor='transparent';">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    </button>
+                </div>
+                <div id="copyFeedback" style="color: var(--primary-color); font-size: 0.75rem; margin-top: 4px; display: none;">Copied!</div>
+                <strong style="display: block; margin-top: var(--spacing-sm);">User</strong>
                 <p id="userLabel">Guest</p>
                 <div class="user-counter-badge" id="userCounter">👥 Users: 1</div>
             </div>
@@ -126,6 +135,53 @@
         let isRemoteAction = false;
         let currentTrackUrl = '';
 
+        // Playback analytics tracking variables
+        let trackedSongId = null;
+        let accumulatedPlayTime = 0;
+        let isPlayCounted = false;
+        let lastPlayStateTimestamp = null;
+        let playBuffer = {};
+
+        // Helper to save current play tracking state to localStorage
+        function saveTrackingState() {
+            try {
+                if (trackedSongId) {
+                    localStorage.setItem('trackedSongId', trackedSongId.toString());
+                } else {
+                    localStorage.removeItem('trackedSongId');
+                }
+                localStorage.setItem('accumulatedPlayTime', accumulatedPlayTime.toString());
+                localStorage.setItem('isPlayCounted', isPlayCounted ? 'true' : 'false');
+            } catch (e) {
+                console.warn('Could not save tracking state to localStorage:', e);
+            }
+        }
+
+        // Load initial buffer and tracking variables from localStorage
+        try {
+            const raw = localStorage.getItem('playBuffer');
+            if (raw) {
+                playBuffer = JSON.parse(raw);
+                console.log('💾 Loaded playBuffer from localStorage:', playBuffer);
+            }
+
+            const savedTrackedSongId = localStorage.getItem('trackedSongId');
+            if (savedTrackedSongId) {
+                trackedSongId = Number(savedTrackedSongId) || savedTrackedSongId;
+            }
+            const savedAccumulatedPlayTime = localStorage.getItem('accumulatedPlayTime');
+            if (savedAccumulatedPlayTime) {
+                accumulatedPlayTime = parseFloat(savedAccumulatedPlayTime) || 0;
+            }
+            const savedIsPlayCounted = localStorage.getItem('isPlayCounted');
+            if (savedIsPlayCounted) {
+                isPlayCounted = savedIsPlayCounted === 'true';
+            }
+            console.log(`💾 Restored tracking state: song=${trackedSongId}, time=${accumulatedPlayTime.toFixed(2)}s, counted=${isPlayCounted}`);
+        } catch (e) {
+            console.warn('Could not load playBuffer or tracking state from localStorage:', e);
+        }
+
         function initPage() {
             console.log('\n📱 ========== PAGE INITIALIZATION START ==========');
             const params = new URLSearchParams(window.location.search);
@@ -148,8 +204,21 @@
             console.log('🔊 [INIT] Volume set to 0.8');
             audio.addEventListener('timeupdate', updateProgress);
             audio.addEventListener('ended', nextTrack);
+            audio.addEventListener('play', handleAudioPlay);
+            audio.addEventListener('playing', handleAudioPlay);
+            audio.addEventListener('pause', handleAudioPause);
+            audio.addEventListener('timeupdate', handleAudioTimeUpdate);
             console.log('🎵 [INIT] Audio event listeners attached');
             loadDefaultSongs();
+
+            // If this is a fresh page load (NOT a reload), send the pending plays now!
+            const isReload = sessionStorage.getItem('isReloading') === 'true';
+            if (!isReload && Object.keys(playBuffer).length > 0) {
+                console.log('📡 [INIT] Detected fresh session with pending plays. Sending batch...');
+                sendPlayAnalytics(true);
+            }
+            // Set reload flag for subsequent refreshes
+            sessionStorage.setItem('isReloading', 'true');
 
             const justJoined = sessionStorage.getItem('justJoined') === 'true';
             if (justJoined) {
@@ -1280,8 +1349,157 @@
             renderSongList();
         }
 
+        function copyRoomId() {
+            const roomId = document.getElementById('roomLabel').textContent;
+            if (!roomId || roomId === 'unknown') return;
+
+            navigator.clipboard.writeText(roomId).then(() => {
+                const feedback = document.getElementById('copyFeedback');
+                if (feedback) {
+                    feedback.style.display = 'block';
+                    setTimeout(() => {
+                        feedback.style.display = 'none';
+                    }, 2000);
+                }
+            }).catch(err => {
+                console.error('Failed to copy room ID: ', err);
+            });
+        }
+
+        function getCurrentSong() {
+            if (!currentTrackUrl) return null;
+            let foundSong = availableSongs.find(s => s.url === currentTrackUrl || (s.localUrl && s.localUrl === currentTrackUrl));
+            if (!foundSong && currentPlaylist && currentPlaylist.songs) {
+                foundSong = currentPlaylist.songs.find(s => s.url === currentTrackUrl);
+            }
+            return foundSong;
+        }
+
+        function handleAudioPlay() {
+            const song = getCurrentSong();
+            if (song && song.id) {
+                if (trackedSongId !== song.id) {
+                    trackedSongId = song.id;
+                    accumulatedPlayTime = 0;
+                    isPlayCounted = false;
+                    saveTrackingState();
+                    console.log(`🎵 [ANALYTICS] Started tracking play duration for song: "${song.title}" (ID: ${song.id})`);
+                }
+                if (lastPlayStateTimestamp === null) {
+                    lastPlayStateTimestamp = Date.now();
+                }
+            }
+        }
+
+        function handleAudioPause() {
+            if (lastPlayStateTimestamp !== null) {
+                accumulatedPlayTime += (Date.now() - lastPlayStateTimestamp) / 1000;
+                lastPlayStateTimestamp = null;
+                saveTrackingState();
+                console.log(`⏸️ [ANALYTICS] Paused. Accumulated play duration: ${accumulatedPlayTime.toFixed(2)}s`);
+            }
+        }
+
+        function handleAudioTimeUpdate() {
+            const song = getCurrentSong();
+            if (!song || !song.id) return;
+
+            if (trackedSongId !== song.id) {
+                if (lastPlayStateTimestamp !== null) {
+                    accumulatedPlayTime += (Date.now() - lastPlayStateTimestamp) / 1000;
+                }
+                trackedSongId = song.id;
+                accumulatedPlayTime = 0;
+                isPlayCounted = false;
+                lastPlayStateTimestamp = !audio.paused ? Date.now() : null;
+                saveTrackingState();
+                console.log(`🔄 [ANALYTICS] Track changed to "${song.title}" (ID: ${song.id}) inside timeupdate.`);
+            }
+
+            if (!audio.paused && lastPlayStateTimestamp !== null) {
+                const currentSessionTime = (Date.now() - lastPlayStateTimestamp) / 1000;
+                const totalPlayedTime = accumulatedPlayTime + currentSessionTime;
+
+                if (totalPlayedTime >= 30 && !isPlayCounted) {
+                    isPlayCounted = true;
+                    saveTrackingState();
+                    incrementPlayCount(song.id, song.title);
+                }
+            }
+        }
+
+        function incrementPlayCount(songId, songTitle) {
+            if (!songId) return;
+            playBuffer[songId] = (playBuffer[songId] || 0) + 1;
+            try {
+                localStorage.setItem('playBuffer', JSON.stringify(playBuffer));
+            } catch (e) {
+                console.warn('Could not save playBuffer to localStorage:', e);
+            }
+            console.log(`📈 [ANALYTICS] Song "${songTitle}" (ID: ${songId}) reached 30s threshold. Play count incremented. Buffer:`, playBuffer);
+        }
+
+        function sendPlayAnalytics(isFreshLoadSend = false) {
+            if (!isFreshLoadSend && lastPlayStateTimestamp !== null) {
+                accumulatedPlayTime += (Date.now() - lastPlayStateTimestamp) / 1000;
+                lastPlayStateTimestamp = null;
+                const song = getCurrentSong();
+                if (song && song.id && trackedSongId === song.id && accumulatedPlayTime >= 30 && !isPlayCounted) {
+                    isPlayCounted = true;
+                    playBuffer[song.id] = (playBuffer[song.id] || 0) + 1;
+                    console.log(`📈 [ANALYTICS] Final flush pushed "${song.title}" (ID: ${song.id}) over 30s. Count incremented.`);
+                }
+            }
+
+            if (Object.keys(playBuffer).length === 0) {
+                console.log('ℹ️ [ANALYTICS] No play analytics to send.');
+                return;
+            }
+
+            const payload = { ...playBuffer };
+            console.log('📤 [ANALYTICS] Sending batched plays via PUT:', payload);
+
+            playBuffer = {};
+            try {
+                localStorage.removeItem('playBuffer');
+                if (isFreshLoadSend) {
+                    localStorage.removeItem('trackedSongId');
+                    localStorage.removeItem('accumulatedPlayTime');
+                    localStorage.removeItem('isPlayCounted');
+                }
+            } catch (e) {}
+
+            const url = getActiveBaseUrl() + '/songs/updatePlays';
+
+            fetch(url, {
+                method: 'PUT',
+                body: JSON.stringify(payload),
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ngrok-skip-browser-warning': 'true'
+                },
+                keepalive: true
+            }).then(response => {
+                if (response.ok) {
+                    console.log('✅ [ANALYTICS] Play count PUT request completed:', response.status);
+                } else {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+            }).catch(err => {
+                console.error('❌ [ANALYTICS] Error sending play counts PUT request:', err);
+                // Restore to localStorage on failure to prevent data loss
+                try {
+                    localStorage.setItem('playBuffer', JSON.stringify(payload));
+                    if (isFreshLoadSend) {
+                        saveTrackingState();
+                    }
+                } catch(e) {}
+            });
+        }
+
         function goBack() {
             console.log('🔙 [NAVIGATION] Navigating back to index.html');
+            sendPlayAnalytics();
             if (currentRoomId && currentUserId && currentRoomId !== 'unknown') {
                 const removePath = `/room/removeUser?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
                 console.log('🚪 [API] POST request to remove user:', removePath);
@@ -1312,6 +1530,16 @@
         window.addEventListener('load', initPage);
 
         window.addEventListener('beforeunload', function () {
+            // Save current session time before page unloads so we do not lose progress
+            if (lastPlayStateTimestamp !== null && trackedSongId) {
+                accumulatedPlayTime += (Date.now() - lastPlayStateTimestamp) / 1000;
+                lastPlayStateTimestamp = null;
+                saveTrackingState();
+            }
+
+            // Set reload flag for sessionStorage (persists across reloads, destroyed on tab close)
+            sessionStorage.setItem('isReloading', 'true');
+
             if (currentRoomId && currentUserId && currentRoomId !== 'unknown') {
                 const removePath = `/room/removeUser?roomId=${encodeURIComponent(currentRoomId)}&userId=${encodeURIComponent(currentUserId)}`;
                 console.log('🚪 [EVENT] Page unloading, removing user:', removePath);

@@ -23,7 +23,7 @@
             </div>
         </div>
         <div style="display: flex; gap: 10px; align-items: center;">
-            <button class="btn" onclick="window.location.href='admin.html'" style="background: #333; color: white; border: none; cursor: pointer;">Admin Console</button>
+            <button class="btn" onclick="goToAdmin()" style="background: #333; color: white; border: none; cursor: pointer;">Admin Console</button>
             <button class="btn btn-danger" onclick="logout()">Logout</button>
         </div>
     </div>
@@ -97,6 +97,29 @@ function logout() {
     localStorage.removeItem('user');
     console.log('✅ [LOGOUT] User data cleared, redirecting to auth.html');
     window.location.href = 'auth.html';
+}
+
+function goToAdmin() {
+    console.log('🔍 [ADMIN REDIRECT] Checking if user is admin...');
+    const userStr = localStorage.getItem('user');
+    let isAdmin = false;
+    if (userStr) {
+        try {
+            const user = JSON.parse(userStr);
+            if (user && user.userId === 'admin' && user.loggedIn) {
+                isAdmin = true;
+            }
+        } catch (e) {
+            console.error('Error parsing user storage:', e);
+        }
+    }
+    if (isAdmin) {
+        console.log('✅ [ADMIN REDIRECT] User is admin. Redirecting to admin.html...');
+        window.location.href = 'admin.html';
+    } else {
+        console.log('❌ [ADMIN REDIRECT] User is not admin. Redirecting to auth.html...');
+        window.location.href = 'auth.html';
+    }
 }
 
 function connect() {
@@ -288,8 +311,41 @@ function sendMessage() {
     console.log('✅ [STOMP] Test message sent');
 }
 
-// Check login on page load
-window.addEventListener('load', checkLogin);
+// Check login and flush pending plays on page load
+window.addEventListener('load', () => {
+    checkLogin();
+    try {
+        const raw = localStorage.getItem('playBuffer');
+        if (raw) {
+            const buffer = JSON.parse(raw);
+            if (Object.keys(buffer).length > 0) {
+                console.log('📡 [ANALYTICS] Found pending plays in localStorage. Flushing...', buffer);
+                const url = getActiveBaseUrl() + '/songs/updatePlays';
+                fetch(url, {
+                    method: 'PUT',
+                    body: JSON.stringify(buffer),
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
+                    keepalive: true
+                }).then(res => {
+                    if (res.ok) {
+                        localStorage.removeItem('playBuffer');
+                        localStorage.removeItem('trackedSongId');
+                        localStorage.removeItem('accumulatedPlayTime');
+                        localStorage.removeItem('isPlayCounted');
+                        console.log('✅ [ANALYTICS] Pending plays flushed successfully');
+                    }
+                }).catch(err => {
+                    console.error('❌ [ANALYTICS] Failed to flush pending plays:', err);
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('Could not parse or flush playBuffer:', e);
+    }
+});
 </script>
 
 </body>

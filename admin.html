@@ -6,6 +6,30 @@
     <link rel="stylesheet" href="global.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
     <script src="api.js"></script>
+    <script>
+        // Check if user is verified as admin
+        (function() {
+            console.log('🔍 [ADMIN AUTH] Verifying admin status...');
+            const userStr = localStorage.getItem('user');
+            let isAdmin = false;
+            if (userStr) {
+                try {
+                    const user = JSON.parse(userStr);
+                    if (user && user.userId === 'admin' && user.loggedIn) {
+                        isAdmin = true;
+                    }
+                } catch (e) {
+                    console.error('Error parsing user storage:', e);
+                }
+            }
+            if (!isAdmin) {
+                console.warn('❌ [ADMIN AUTH] Access denied. User is not verified as admin. Redirecting to auth.html...');
+                window.location.replace('auth.html');
+            } else {
+                console.log('✅ [ADMIN AUTH] Verified admin access.');
+            }
+        })();
+    </script>
     <style>
         body {
             padding: 20px;
@@ -387,41 +411,22 @@
 
         <hr>
 
-        <h3>Top 5 Most Played Songs (Mock Data / Temporary String)</h3>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; max-width: 600px; flex-wrap: wrap; gap: 8px;">
+            <h3 style="margin: 0; padding: 0;">Top 5 Most Played Songs</h3>
+            <button onclick="fetchTopSongs()" class="btn">Refresh Leaderboard</button>
+        </div>
         <div class="table-container" style="max-width: 600px;">
             <table>
                 <thead>
                     <tr>
                         <th style="width: 80px;">Rank</th>
                         <th>Song Title</th>
-                        <th style="width: 150px; text-align: right;">Simulated Plays</th>
+                        <th style="width: 150px; text-align: right;">Plays</th>
                     </tr>
                 </thead>
-                <tbody>
+                <tbody id="top-songs-table-body">
                     <tr>
-                        <td>1</td>
-                        <td>Dil Se.mp3 (Mock String)</td>
-                        <td style="text-align: right;">1,245</td>
-                    </tr>
-                    <tr>
-                        <td>2</td>
-                        <td>Kabira.mp3 (Mock String)</td>
-                        <td style="text-align: right;">987</td>
-                    </tr>
-                    <tr>
-                        <td>3</td>
-                        <td>Kun Faya Kun.mp3 (Mock String)</td>
-                        <td style="text-align: right;">854</td>
-                    </tr>
-                    <tr>
-                        <td>4</td>
-                        <td>Kesariya.mp3 (Mock String)</td>
-                        <td style="text-align: right;">712</td>
-                    </tr>
-                    <tr>
-                        <td>5</td>
-                        <td>Tum Hi Ho.mp3 (Mock String)</td>
-                        <td style="text-align: right;">643</td>
+                        <td colspan="3" style="text-align: center;">Loading top songs...</td>
                     </tr>
                 </tbody>
             </table>
@@ -840,11 +845,60 @@
         // --- 3. SONG DATABASE LOGIC (Real fetch & real upload & mock remove) ---
         let loadedSongs = [];
 
+        function fetchTopSongs() {
+            const tbody = document.getElementById('top-songs-table-body');
+            if (tbody) {
+                tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Loading top songs...</td></tr>';
+            }
+
+            fetchWithFallback('/songs/GetTop5')
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                return res.json();
+            })
+            .then(data => {
+                console.log('[Admin] Top 5 songs received:', data);
+                if (!tbody) return;
+                tbody.innerHTML = '';
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No song play data available.</td></tr>';
+                    return;
+                }
+                
+                // Sort by plays desc (or playCount, or count)
+                const sorted = [...data].sort((a, b) => {
+                    const playsA = a.plays || a.playCount || a.count || 0;
+                    const playsB = b.plays || b.playCount || b.count || 0;
+                    return playsB - playsA;
+                }).slice(0, 5);
+
+                sorted.forEach((song, index) => {
+                    const tr = document.createElement('tr');
+                    const plays = song.plays || song.playCount || song.count || 0;
+                    const title = song.title || song.songTitle || 'Unknown Song';
+                    tr.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td>${escapeHtml(title)}</td>
+                        <td style="text-align: right;">${plays.toLocaleString()}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => {
+                console.error('[Admin] Failed to load top songs:', err);
+                if (tbody) {
+                    tbody.innerHTML = `<tr><td colspan="3" class="error" style="text-align: center;">Failed to load top songs: ${err.message}</td></tr>`;
+                }
+            });
+        }
+
         function fetchSongsDatabase() {
             const totalSpan = document.getElementById('total-songs-count');
             const tbody = document.getElementById('songs-table-body');
             totalSpan.textContent = 'Loading...';
             tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">Fetching latest song database...</td></tr>';
+
+            fetchTopSongs();
 
             // Real API Call: /songs/getLocalSongs
             console.log('[Admin] Requesting songs list from /songs/getLocalSongs');
